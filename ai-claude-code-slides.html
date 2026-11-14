@@ -1,0 +1,2994 @@
+<title>Zero to Claude Code</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Literata:opsz,wght@7..72,400..700&display=swap">
+<style>
+/* ---------------------------------------------------------------
+   Zero to Claude Code
+   Visual system: a study desk. Cool paper, ballpoint blue, red
+   margin rule, highlighter yellow, and index cards as the motif.
+   --------------------------------------------------------------- */
+:root {
+  /* Light palette */
+  --desk: #e6eae2;
+  --paper: #f8f8f2;
+  --paper-2: #eef0e8;
+  --card: #fcfcf6;
+  --ink: #18231d;
+  --muted: #5d6b61;
+  --line: #ccd4ca;
+  --line-strong: #aeb9ad;
+  --accent: #2f517a;
+  --accent-soft: #dbe6f3;
+  --mark: #e6c84f;
+  --mark-soft: #f4e6a6;
+  --margin: #a83e47;
+  --shadow: rgba(24, 35, 29, 0.18);
+  --rule-faint: rgba(47, 81, 122, 0.08);
+  --code-bg: #1b251f;
+  --code-fg: #e9efe6;
+  --code-muted: #94a698;
+  --code-key: #efd36a;
+  --code-str: #9cc7f0;
+  --code-line: #2d3b31;
+  --inverse-bg: #1b2a22;
+  --inverse-fg: #f4f6ee;
+  --inverse-muted: #b9c6b8;
+  --inverse-accent: #e6c84f;
+  --focus: #2f517a;
+  --overlay: rgba(230, 234, 226, 0.97);
+  --selection: #f4e6a6;
+
+  /* Type */
+  --font-body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --font-display: "Literata", Georgia, "Times New Roman", serif;
+  --font-mono: "IBM Plex Mono", "Cascadia Code", Consolas, monospace;
+  --fs-h1: clamp(2.9rem, 6.6vw, 6.3rem);
+  --fs-h2: clamp(1.8rem, 3.7vw, 3.1rem);
+  --fs-h3: clamp(1.05rem, 1.5vw, 1.28rem);
+  --fs-lede: clamp(1rem, 1.35vw, 1.18rem);
+  --fs-body: clamp(0.95rem, 1.05vw, 1.06rem);
+  --fs-small: clamp(0.82rem, 0.95vw, 0.93rem);
+  --fs-micro: 0.68rem;
+  --fs-code: clamp(0.72rem, 1.05vw, 0.82rem);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --desk: #0b100c;
+    --paper: #151d17;
+    --paper-2: #1c261f;
+    --card: #1a241d;
+    --ink: #e7ede4;
+    --muted: #9eac9f;
+    --line: #334038;
+    --line-strong: #4b5c4f;
+    --accent: #8db4e2;
+    --accent-soft: #1e2d3d;
+    --mark: #d9bd55;
+    --mark-soft: #3a3520;
+    --margin: #e07a83;
+    --shadow: rgba(0, 0, 0, 0.5);
+    --rule-faint: rgba(141, 180, 226, 0.07);
+    --code-bg: #080d09;
+    --code-fg: #dce6db;
+    --code-muted: #84998a;
+    --code-key: #e7c95e;
+    --code-str: #8fb8e6;
+    --code-line: #243128;
+    --inverse-bg: #e7ece2;
+    --inverse-fg: #131d16;
+    --inverse-muted: #566459;
+    --inverse-accent: #8a6a12;
+    --focus: #8db4e2;
+    --overlay: rgba(11, 16, 12, 0.97);
+    --selection: #3a3520;
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme="dark"] {
+  --desk: #0b100c;
+  --paper: #151d17;
+  --paper-2: #1c261f;
+  --card: #1a241d;
+  --ink: #e7ede4;
+  --muted: #9eac9f;
+  --line: #334038;
+  --line-strong: #4b5c4f;
+  --accent: #8db4e2;
+  --accent-soft: #1e2d3d;
+  --mark: #d9bd55;
+  --mark-soft: #3a3520;
+  --margin: #e07a83;
+  --shadow: rgba(0, 0, 0, 0.5);
+  --rule-faint: rgba(141, 180, 226, 0.07);
+  --code-bg: #080d09;
+  --code-fg: #dce6db;
+  --code-muted: #84998a;
+  --code-key: #e7c95e;
+  --code-str: #8fb8e6;
+  --code-line: #243128;
+  --inverse-bg: #e7ece2;
+  --inverse-fg: #131d16;
+  --inverse-muted: #566459;
+  --inverse-accent: #8a6a12;
+  --focus: #8db4e2;
+  --overlay: rgba(11, 16, 12, 0.97);
+  --selection: #3a3520;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+
+html, body { height: 100%; }
+
+body {
+  margin: 0;
+  background: var(--desk);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 16px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  overflow-x: hidden;
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0 0 auto;
+  height: env(safe-area-inset-top, 0px);
+  background: var(--desk);
+  z-index: 60;
+  pointer-events: none;
+}
+
+::selection { background: var(--selection); color: var(--ink); }
+
+h1, h2, h3, p, figure, blockquote { margin: 0; }
+button { font: inherit; }
+a { color: var(--accent); }
+
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 3px;
+}
+
+/* ---------- Chrome ---------- */
+.app {
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.topbar {
+  position: sticky;
+  top: env(safe-area-inset-top, 0px);
+  z-index: 50;
+  background: var(--desk);
+  border-bottom: 1px solid var(--line);
+  padding-block: 12px 0;
+}
+
+.topbar-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+  min-height: 40px;
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin-right: auto;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.brand-mark {
+  position: relative;
+  width: 22px;
+  height: 16px;
+  flex: none;
+  background: var(--card);
+  border: 1px solid var(--line-strong);
+}
+.brand-mark::before {
+  content: "";
+  position: absolute;
+  left: 3px;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--margin);
+  opacity: 0.7;
+}
+
+.section-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 34ch;
+}
+
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.nav-btn,
+.tool-btn,
+.close-btn {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--ink);
+  background: var(--paper);
+  border: 1px solid var(--line-strong);
+  padding: 6px 9px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.nav-btn {
+  min-width: 34px;
+  height: 32px;
+  font-size: 14px;
+}
+.nav-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+.nav-btn:hover:not(:disabled),
+.tool-btn:hover,
+.close-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+.tool-btn {
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.tool-btn[aria-pressed="true"] {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.tool-btn .key {
+  color: var(--muted);
+  font-size: 9px;
+  border: 1px solid var(--line);
+  padding: 1px 3px;
+}
+.tool-btn[aria-pressed="true"] .key { color: var(--accent); border-color: var(--accent); }
+
+.counter {
+  min-width: 64px;
+  text-align: center;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.progress-track {
+  height: 2px;
+  margin-top: 10px;
+  background: var(--line);
+  overflow: hidden;
+}
+.progress-fill {
+  height: 100%;
+  width: 0;
+  background: var(--accent);
+  transition: width 0.25s ease;
+}
+
+/* ---------- Deck ---------- */
+.stage {
+  flex: 1 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding-block: clamp(14px, 2.5vh, 26px) clamp(22px, 5vh, 44px);
+}
+
+.slide-shell {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+}
+
+.slide {
+  position: relative;
+  display: none;
+  width: min(1180px, 100%);
+  min-height: clamp(430px, 67vh, 690px);
+  padding: clamp(24px, 4.2vw, 56px) clamp(22px, 4.5vw, 64px);
+  flex-direction: column;
+  justify-content: center;
+  gap: clamp(16px, 2.6vw, 28px);
+  background: var(--paper);
+  border: 1px solid var(--line);
+  box-shadow: 0 24px 60px -38px var(--shadow), 0 1px 0 var(--line);
+}
+
+.slide::before {
+  content: "";
+  position: absolute;
+  left: clamp(10px, 1.8vw, 24px);
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--margin);
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.slide.is-active {
+  display: flex;
+  animation: slide-in 0.28s ease-out both;
+}
+
+@keyframes slide-in {
+  from { opacity: 0; transform: translateY(9px); }
+  to { opacity: 1; transform: none; }
+}
+
+.slide-head {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--font-mono);
+  font-size: var(--fs-micro);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.eyebrow::before {
+  content: "";
+  width: 18px;
+  height: 2px;
+  flex: none;
+  background: var(--mark);
+}
+
+h1, h2 {
+  font-family: var(--font-display);
+  font-weight: 600;
+  text-wrap: balance;
+}
+h1 {
+  font-size: var(--fs-h1);
+  line-height: 0.96;
+  letter-spacing: -0.035em;
+}
+h2 {
+  font-size: var(--fs-h2);
+  line-height: 1.04;
+  letter-spacing: -0.022em;
+}
+h3 {
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: var(--fs-h3);
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+}
+
+.lede {
+  max-width: 64ch;
+  font-size: var(--fs-lede);
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.small { font-size: var(--fs-small); color: var(--muted); line-height: 1.45; }
+.mono { font-family: var(--font-mono); }
+.center { text-align: center; }
+
+.hl {
+  display: inline-block;
+  padding: 0 0.04em;
+  background: linear-gradient(transparent 58%, var(--mark-soft) 58%, var(--mark-soft) 92%, transparent 92%);
+}
+
+/* ---------- Layout ---------- */
+.cols {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: clamp(18px, 3vw, 40px);
+  align-items: start;
+}
+.cols > * { min-width: 0; }
+.slide,
+.roadmap-step,
+.fact,
+.play,
+.policy-col,
+.layer,
+.rag-node,
+.process-step,
+.overlay-item,
+.outcome,
+.start-card { min-width: 0; }
+.cols--wide-left { grid-template-columns: minmax(0, 1.18fr) minmax(0, 0.82fr); }
+.cols--wide-right { grid-template-columns: minmax(0, 0.82fr) minmax(0, 1.18fr); }
+.cols--top { align-items: start; }
+
+.stack { display: flex; flex-direction: column; gap: clamp(12px, 2vw, 20px); }
+.stack--tight { gap: 9px; }
+
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+.list li {
+  position: relative;
+  padding-left: 18px;
+  font-size: var(--fs-body);
+  line-height: 1.45;
+}
+.list li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0.56em;
+  width: 6px;
+  height: 6px;
+  background: var(--accent);
+}
+.list--bad li::before { background: var(--margin); }
+.list--mark li::before { background: var(--mark); }
+.list strong { font-weight: 600; }
+
+.tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px;
+  border: 1px solid var(--line-strong);
+  background: var(--paper-2);
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.tag--good { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
+.tag--bad { border-color: var(--margin); color: var(--margin); }
+.tag--mark { border-color: var(--mark); background: var(--mark-soft); color: var(--ink); }
+
+.banner {
+  border-left: 3px solid var(--margin);
+  background: var(--paper-2);
+  padding: 11px 14px;
+  font-size: var(--fs-small);
+  line-height: 1.45;
+}
+.banner strong { color: var(--margin); }
+.banner--accent { border-left-color: var(--accent); }
+.banner--accent strong { color: var(--accent); }
+.banner--mark { border-left-color: var(--mark); }
+.banner--mark strong { color: var(--ink); }
+
+/* ---------- Code ---------- */
+code {
+  font-family: var(--font-mono);
+  font-size: 0.88em;
+  background: var(--paper-2);
+  border: 1px solid var(--line);
+  padding: 0.08em 0.34em;
+  color: var(--ink);
+}
+
+.code {
+  margin: 0;
+  padding: clamp(13px, 1.8vw, 19px);
+  background: var(--code-bg);
+  color: var(--code-fg);
+  border: 1px solid var(--code-line);
+  font-family: var(--font-mono);
+  font-size: var(--fs-code);
+  line-height: 1.65;
+  overflow-x: auto;
+  white-space: pre;
+  tab-size: 2;
+  min-width: 0;
+}
+.code code {
+  display: block;
+  background: none;
+  border: 0;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  white-space: inherit;
+}
+.code .c { color: var(--code-muted); }
+.code .k { color: var(--code-key); }
+.code .s { color: var(--code-str); }
+
+.code-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 5px;
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.term {
+  border: 1px solid var(--code-line);
+  background: var(--code-bg);
+  color: var(--code-fg);
+  min-width: 0;
+}
+.term-bar {
+  padding: 8px 13px;
+  border-bottom: 1px solid var(--code-line);
+  color: var(--code-muted);
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  letter-spacing: 0.06em;
+}
+.term-body {
+  padding: 13px 15px;
+  font-family: var(--font-mono);
+  font-size: var(--fs-code);
+  line-height: 1.8;
+  white-space: pre;
+  overflow-x: auto;
+}
+.term-body .prompt { color: var(--code-key); }
+.term-body .out { color: var(--code-muted); }
+
+/* ---------- Table ---------- */
+.table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  background: var(--paper-2);
+  min-width: 0;
+}
+table {
+  width: 100%;
+  min-width: 560px;
+  border-collapse: collapse;
+  font-size: var(--fs-small);
+}
+th {
+  padding: 9px 13px;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+td {
+  padding: 10px 13px;
+  border-bottom: 1px solid var(--line);
+  vertical-align: top;
+  line-height: 1.4;
+}
+tr:last-child td { border-bottom: 0; }
+td:first-child { white-space: nowrap; font-weight: 600; }
+
+/* ---------- Title ---------- */
+.slide--title { justify-content: space-between; }
+.title-grid {
+  flex: 1 1 auto;
+  display: grid;
+  grid-template-columns: minmax(0, 1.14fr) minmax(255px, 0.86fr);
+  gap: clamp(24px, 5vw, 64px);
+  align-items: center;
+  align-content: center;
+}
+.title-copy {
+  display: flex;
+  flex-direction: column;
+  gap: clamp(14px, 2.2vw, 22px);
+  min-width: 0;
+}
+h1 span { display: block; }
+h1 .hl { display: inline-block; }
+.title-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.title-meta span { position: relative; }
+.title-meta span + span::before {
+  content: "";
+  position: absolute;
+  left: -11px;
+  top: 50%;
+  width: 3px;
+  height: 3px;
+  background: var(--line-strong);
+}
+.title-foot {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 8px 18px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+  font-size: var(--fs-small);
+  color: var(--muted);
+}
+.title-foot .mono { color: var(--ink); }
+
+.card-stack {
+  display: grid;
+  width: min(100%, 360px);
+  margin-inline: auto;
+  padding: 8px;
+}
+.index-card {
+  grid-area: 1 / 1;
+  position: relative;
+  padding: 16px 18px 16px 28px;
+  background-color: var(--card);
+  background-image: repeating-linear-gradient(
+    to bottom,
+    transparent 0,
+    transparent 27px,
+    var(--rule-faint) 27px,
+    var(--rule-faint) 28px
+  );
+  background-position: 0 8px;
+  border: 1px solid var(--line-strong);
+  box-shadow: 0 18px 30px -22px var(--shadow);
+  line-height: 28px;
+}
+.index-card::before {
+  content: "";
+  position: absolute;
+  left: 13px;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--margin);
+  opacity: 0.65;
+}
+.index-card--back1 { transform: rotate(-5deg) translate(-9px, 8px); z-index: 0; }
+.index-card--back2 { transform: rotate(3deg) translate(9px, 6px); z-index: 1; }
+.index-card--front { transform: rotate(-1.2deg); z-index: 2; }
+.card-tab {
+  font-family: var(--font-mono);
+  font-size: 0.6rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--margin);
+  line-height: 22px;
+}
+.card-q {
+  font-family: var(--font-display);
+  font-size: 1.02rem;
+  font-weight: 600;
+  line-height: 28px;
+}
+.card-answer {
+  font-size: 0.8rem;
+  line-height: 28px;
+  color: var(--ink);
+}
+.card-source {
+  font-family: var(--font-mono);
+  font-size: 0.58rem;
+  line-height: 28px;
+  color: var(--muted);
+}
+
+/* ---------- Section dividers ---------- */
+.slide--inverse {
+  background: var(--inverse-bg);
+  color: var(--inverse-fg);
+  border-color: transparent;
+}
+.slide--inverse::before { background: var(--inverse-muted); opacity: 0.25; }
+.slide--inverse .eyebrow { color: var(--inverse-muted); }
+.slide--inverse .eyebrow::before { background: var(--inverse-accent); }
+.section-grid {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: clamp(18px, 4.5vw, 56px);
+  align-items: center;
+}
+.section-num {
+  font-family: var(--font-mono);
+  font-size: clamp(4.2rem, 12vw, 10rem);
+  line-height: 0.8;
+  letter-spacing: -0.08em;
+  font-weight: 500;
+  color: var(--inverse-accent);
+}
+.section-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 13px;
+  max-width: 46ch;
+}
+.section-copy h2 { font-size: clamp(2.2rem, 5.5vw, 4.6rem); }
+.section-copy .lede { color: var(--inverse-muted); }
+.section-topics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 8px;
+  padding-top: 5px;
+}
+.section-topics span {
+  padding: 3px 8px;
+  border: 1px solid var(--inverse-muted);
+  color: var(--inverse-muted);
+  font-family: var(--font-mono);
+  font-size: 0.6rem;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  opacity: 0.85;
+}
+
+/* ---------- Outcomes / roadmap ---------- */
+.outcomes {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 clamp(22px, 4vw, 46px);
+  border-top: 1px solid var(--line);
+}
+.outcome {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr);
+  gap: 10px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line);
+}
+.outcome-num {
+  padding-top: 2px;
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  color: var(--muted);
+}
+.outcome p { font-size: var(--fs-body); line-height: 1.42; }
+.outcome strong { font-weight: 600; }
+
+.roadmap {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: clamp(15px, 2.4vw, 26px);
+}
+.roadmap-step {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding-top: 13px;
+  border-top: 2px solid var(--line-strong);
+}
+.roadmap-num {
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  letter-spacing: 0.1em;
+  color: var(--accent);
+}
+.roadmap-step p { font-size: var(--fs-small); line-height: 1.42; color: var(--muted); }
+.roadmap-time {
+  margin-top: auto;
+  padding-top: 4px;
+  font-family: var(--font-mono);
+  font-size: 0.6rem;
+  color: var(--muted);
+}
+
+/* ---------- Prediction visual ---------- */
+.predict {
+  display: flex;
+  flex-direction: column;
+  gap: 11px;
+  padding: clamp(15px, 2.2vw, 22px);
+  border: 1px solid var(--line);
+  background: var(--paper-2);
+}
+.predict-label {
+  font-family: var(--font-mono);
+  font-size: 0.6rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.predict-sentence {
+  font-family: var(--font-display);
+  font-size: clamp(1.15rem, 1.9vw, 1.5rem);
+  line-height: 1.4;
+}
+.blank {
+  display: inline-block;
+  min-width: 4ch;
+  border-bottom: 2px solid var(--accent);
+  color: var(--accent);
+}
+.predict-arrow {
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  color: var(--muted);
+}
+.token-row { display: flex; flex-wrap: wrap; gap: 7px; }
+.token {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 7px 9px;
+  border: 1px solid var(--line-strong);
+  background: var(--paper);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+}
+.token b { font-weight: 500; color: var(--muted); }
+.token--chosen { border-color: var(--accent); background: var(--accent-soft); }
+.token--chosen b { color: var(--accent); }
+
+/* ---------- Facts ---------- */
+.facts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: clamp(16px, 2.5vw, 28px);
+}
+.fact {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 13px;
+  border-top: 2px solid var(--line-strong);
+}
+.fact p { font-size: var(--fs-small); line-height: 1.44; color: var(--muted); }
+.fact .fix {
+  margin-top: auto;
+  padding-top: 9px;
+  border-top: 1px dashed var(--line);
+  font-size: var(--fs-small);
+  color: var(--ink);
+}
+.fact .fix strong { color: var(--accent); }
+
+/* ---------- Desk map ---------- */
+.desk-map {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 7px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  background: var(--paper-2);
+}
+.desk-block {
+  display: flex;
+  align-items: center;
+  min-height: 52px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  background: var(--paper);
+  font-size: var(--fs-small);
+  line-height: 1.3;
+}
+.desk-block--wide { grid-column: 1 / -1; }
+.desk-block--free { border-style: dashed; background: transparent; color: var(--muted); }
+
+/* ---------- Diagrams ---------- */
+figure.diagram { min-width: 0; }
+.diagram svg { display: block; width: 100%; height: auto; }
+.diagram figcaption {
+  margin-top: 6px;
+  font-size: 0.72rem;
+  line-height: 1.4;
+  color: var(--muted);
+}
+.diagram-node { fill: var(--paper-2); stroke: var(--line-strong); stroke-width: 1.2; }
+.diagram-node--accent { fill: var(--accent-soft); stroke: var(--accent); }
+.diagram-label { fill: var(--ink); font-family: var(--font-body); font-size: 13px; font-weight: 600; }
+.diagram-sub { fill: var(--muted); font-family: var(--font-body); font-size: 10.5px; }
+.diagram-muted { fill: var(--muted); font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.08em; text-transform: uppercase; }
+.diagram-arrow { fill: none; stroke: var(--muted); stroke-width: 1.4; marker-end: url(#arrow); }
+.arrowhead { fill: var(--muted); }
+
+/* ---------- Mini loop ---------- */
+.mini-loop {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 7px;
+  padding-top: 3px;
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+.mini-loop span {
+  padding: 4px 8px;
+  border: 1px solid var(--line-strong);
+  background: var(--paper-2);
+}
+.mini-loop i { font-style: normal; color: var(--accent); }
+
+/* ---------- Process ---------- */
+.process {
+  display: flex;
+  flex-direction: column;
+  margin-left: 5px;
+  border-left: 1px solid var(--line-strong);
+}
+.process-step {
+  position: relative;
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr);
+  gap: 10px;
+  padding: 8px 0 8px 17px;
+}
+.process-step::before {
+  content: "";
+  position: absolute;
+  left: -4px;
+  top: 18px;
+  width: 7px;
+  height: 7px;
+  background: var(--accent);
+}
+.process-num {
+  padding-top: 1px;
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  color: var(--muted);
+}
+.process-step p { font-size: var(--fs-small); line-height: 1.4; color: var(--muted); }
+.process-step strong { color: var(--ink); font-weight: 600; }
+
+/* ---------- Subagent map ---------- */
+.subagent-map {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 116px minmax(0, 1fr);
+  gap: 10px;
+  align-items: stretch;
+}
+.agent-node {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 14px;
+  border: 1px solid var(--line-strong);
+  background: var(--paper-2);
+  min-width: 0;
+}
+.agent-node p { font-size: var(--fs-small); line-height: 1.4; color: var(--muted); }
+.agent-link {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 12px;
+  text-align: center;
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  line-height: 1.5;
+  color: var(--muted);
+}
+.agent-link .mobile { display: none; }
+
+/* ---------- Progressive disclosure ---------- */
+.layers {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.layer {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 9px 11px;
+  border: 1px solid var(--line);
+  background: var(--paper-2);
+}
+.layer--1 { width: 54%; }
+.layer--2 { width: 77%; }
+.layer--3 { width: 100%; }
+.layer-label {
+  font-family: var(--font-mono);
+  font-size: 0.58rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.layer p { font-size: var(--fs-small); line-height: 1.35; }
+
+/* ---------- RAG flow ---------- */
+.rag-flow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: 7px;
+}
+.rag-node {
+  flex: 1 1 120px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid var(--line-strong);
+  background: var(--paper-2);
+}
+.rag-node b {
+  font-family: var(--font-mono);
+  font-size: 0.58rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.rag-node span { font-size: var(--fs-small); line-height: 1.32; }
+.rag-arrow {
+  align-self: center;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+}
+
+/* ---------- Command map ---------- */
+.command-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 17px clamp(22px, 3.5vw, 38px);
+}
+.command-group { padding-top: 11px; border-top: 1px solid var(--line); min-width: 0; }
+.command-group h3 {
+  margin-bottom: 7px;
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.command-group ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.command-group li {
+  display: grid;
+  grid-template-columns: 92px minmax(0, 1fr);
+  gap: 9px;
+  font-size: var(--fs-small);
+  line-height: 1.35;
+}
+
+/* ---------- Playbook ---------- */
+.playbook {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 11px;
+}
+.play {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  background: var(--paper-2);
+  min-width: 0;
+}
+.play p { font-size: var(--fs-small); line-height: 1.38; color: var(--muted); }
+.play .prompt {
+  margin-top: auto;
+  padding-top: 6px;
+  border-top: 1px dashed var(--line);
+  font-family: var(--font-mono);
+  font-size: 0.64rem;
+  line-height: 1.4;
+  color: var(--accent);
+}
+
+/* ---------- Policy ---------- */
+.policy {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: clamp(16px, 2.6vw, 28px);
+}
+.policy-col { padding-top: 11px; border-top: 2px solid var(--line-strong); }
+.policy-col--ok { border-color: var(--accent); }
+.policy-col--ask { border-color: var(--mark); }
+.policy-col--no { border-color: var(--margin); }
+.policy-col ul {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.policy-col li { position: relative; padding-left: 13px; font-size: var(--fs-small); line-height: 1.4; }
+.policy-col li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0.55em;
+  width: 4px;
+  height: 4px;
+  background: var(--line-strong);
+}
+
+/* ---------- Final CTA ---------- */
+.start-card {
+  padding: clamp(16px, 2.5vw, 24px);
+  border: 1px solid var(--line-strong);
+  background: var(--paper-2);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.start-card .cmd {
+  font-family: var(--font-mono);
+  font-size: clamp(1rem, 1.8vw, 1.35rem);
+  color: var(--accent);
+  letter-spacing: -0.02em;
+}
+.start-card p { font-size: var(--fs-small); line-height: 1.45; color: var(--muted); }
+
+/* ---------- Notes panel ---------- */
+.notes-panel {
+  position: fixed;
+  z-index: 70;
+  right: max(16px, env(safe-area-inset-right, 0px));
+  bottom: max(16px, env(safe-area-inset-bottom, 0px));
+  width: min(390px, calc(100vw - 32px));
+  max-height: min(58vh, 520px);
+  overflow: auto;
+  padding: 14px 16px 16px;
+  background: var(--paper);
+  border: 1px solid var(--line-strong);
+  box-shadow: 0 24px 60px -24px var(--shadow);
+}
+.notes-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+.notes-label {
+  font-family: var(--font-mono);
+  font-size: 0.6rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.notes-panel p { font-size: var(--fs-small); line-height: 1.55; }
+.notes-panel p + p { margin-top: 7px; }
+.notes-panel strong { font-weight: 600; }
+.notes-panel code { font-size: 0.8em; }
+
+/* ---------- Overlay ---------- */
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  overflow: auto;
+  padding:
+    max(18px, env(safe-area-inset-top, 0px))
+    max(16px, env(safe-area-inset-right, 0px))
+    max(18px, env(safe-area-inset-bottom, 0px))
+    max(16px, env(safe-area-inset-left, 0px));
+  background: var(--overlay);
+}
+.overlay-inner {
+  width: min(1100px, 100%);
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 17px;
+}
+.overlay-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--line);
+}
+.overlay-head h2 { font-size: clamp(1.5rem, 2.8vw, 2.2rem); }
+.overlay-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 7px;
+}
+.overlay-item {
+  display: flex;
+  align-items: baseline;
+  gap: 9px;
+  padding: 9px 11px;
+  border: 1px solid var(--line);
+  background: var(--paper);
+  color: var(--ink);
+  text-align: left;
+  font-family: var(--font-body);
+  font-size: var(--fs-small);
+  line-height: 1.35;
+  cursor: pointer;
+}
+.overlay-item:hover { border-color: var(--accent); color: var(--accent); }
+.overlay-item.is-current {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.overlay-item .n {
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: 0.6rem;
+  color: var(--muted);
+}
+.overlay-item.is-current .n { color: var(--accent); }
+.overlay-item .t { min-width: 0; }
+
+body.overlay-open { overflow: hidden; }
+
+/* ---------- Responsive ---------- */
+@media (max-width: 1000px) {
+  .roadmap { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .playbook { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 820px) {
+  .facts { grid-template-columns: 1fr; }
+  .fact { padding-top: 10px; }
+  .policy { grid-template-columns: 1fr; }
+  .policy-col { padding-top: 9px; }
+  .rag-flow { flex-direction: column; }
+  .rag-arrow { transform: rotate(90deg); align-self: center; }
+}
+
+@media (max-width: 900px) {
+  .title-grid { grid-template-columns: 1fr; }
+  .card-stack { width: 100%; max-width: 420px; margin-top: 2px; }
+  .index-card--back1, .index-card--back2 { display: none; }
+  .index-card--front { transform: none; }
+  .cols, .cols--wide-left, .cols--wide-right { grid-template-columns: 1fr; }
+  .command-grid { grid-template-columns: 1fr; }
+  .subagent-map { grid-template-columns: 1fr; }
+  .agent-link { flex-direction: row; gap: 18px; padding: 2px 0; }
+  .agent-link .desktop { display: none; }
+  .agent-link .mobile { display: block; }
+  .section-grid { grid-template-columns: 1fr; gap: 10px; }
+  .section-num { font-size: clamp(3.6rem, 14vw, 6rem); }
+  .section-copy { max-width: 100%; }
+}
+
+@media (max-width: 760px) {
+  .section-label { display: none; }
+  .brand-name { font-size: 12px; }
+  .counter { min-width: 54px; }
+  .slide { min-height: 0; }
+  .slide--title { min-height: 0; }
+  .outcomes { grid-template-columns: 1fr; }
+  .roadmap { grid-template-columns: 1fr; }
+  .roadmap-step { padding-top: 10px; }
+  .layer--1, .layer--2, .layer--3 { width: 100%; }
+}
+
+@media (max-width: 620px) {
+  .tool-label { display: none; }
+  .tool-btn { padding: 6px 8px; }
+  .playbook { grid-template-columns: 1fr; }
+  .title-meta { gap: 6px 15px; }
+  .title-meta span + span::before { left: -10px; }
+  .title-foot { flex-direction: column; }
+  .section-copy h2 { font-size: clamp(2rem, 9vw, 3.2rem); }
+  .slide { padding: clamp(20px, 5vw, 30px) clamp(18px, 5vw, 26px); }
+  .slide::before { left: 9px; }
+}
+
+@media (max-width: 420px) {
+  .brand-name { display: none; }
+  .nav-btn { min-width: 30px; height: 30px; }
+  .tool-btn { height: 30px; }
+  .counter { font-size: 10px; }
+  h2 { font-size: clamp(1.6rem, 8vw, 2.2rem); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .slide.is-active { animation: none; }
+  .progress-fill { transition: none; }
+}
+</style>
+
+<div class="app" id="app">
+  <header class="topbar">
+    <div class="topbar-row">
+      <button class="brand" id="brandBtn" type="button" aria-label="Go to the title slide">
+        <span class="brand-mark" aria-hidden="true"></span>
+        <span class="brand-name">Zero to Claude Code</span>
+      </button>
+      <span class="section-label" id="sectionLabel">Introduction</span>
+      <div class="topbar-actions">
+        <button class="nav-btn" id="prevBtn" type="button" aria-label="Previous slide">←</button>
+        <span class="counter" id="counter" aria-live="polite">01 / 40</span>
+        <button class="nav-btn" id="nextBtn" type="button" aria-label="Next slide">→</button>
+        <button class="tool-btn" id="notesBtn" type="button" aria-pressed="false" aria-label="Toggle speaker notes">
+          <span class="tool-label">Notes</span><span class="key" aria-hidden="true">N</span>
+        </button>
+        <button class="tool-btn" id="menuBtn" type="button" aria-label="Open contents">
+          <span class="tool-label">Contents</span><span class="key" aria-hidden="true">O</span>
+        </button>
+      </div>
+    </div>
+    <div class="progress-track" aria-hidden="true">
+      <div class="progress-fill" id="progressFill"></div>
+    </div>
+  </header>
+
+  <main class="stage" id="stage">
+    <div class="slide-shell">
+
+      <!-- 01 -->
+      <section class="slide slide--title is-active" data-title="Zero to Claude Code" data-section="Introduction" aria-hidden="false">
+        <div class="title-grid">
+          <div class="title-copy">
+            <p class="eyebrow">A practical introduction · 90 minutes</p>
+            <h1><span>Zero to</span><span class="hl">Claude Code</span></h1>
+            <p class="lede">How to use AI for real college work, from your first prompt to your first agent.</p>
+            <div class="title-meta">
+              <span>For complete beginners</span>
+              <span>No coding required to start</span>
+              <span>One running example</span>
+            </div>
+          </div>
+          <div class="card-stack" aria-hidden="true">
+            <article class="index-card index-card--back1">
+              <div class="card-tab">PSY 101 · Lecture 02</div>
+              <p class="card-q">Q: What is the availability heuristic?</p>
+              <p class="card-answer">A: Judging likelihood by what comes to mind easily.</p>
+              <p class="card-source">Source: Memory and judgment</p>
+            </article>
+            <article class="index-card index-card--back2">
+              <div class="card-tab">PSY 101 · Lecture 03</div>
+              <p class="card-q">Q: What is anchoring?</p>
+              <p class="card-answer">A: Leaning on the first number you see.</p>
+              <p class="card-source">Source: Judgment biases</p>
+            </article>
+            <article class="index-card index-card--front">
+              <div class="card-tab">PSY 101 · Lecture 01</div>
+              <p class="card-q">Q: What is confirmation bias?</p>
+              <p class="card-answer">A: Seeking evidence that confirms what you already believe.</p>
+              <p class="card-source">Source: Lecture 01 · Cognitive biases</p>
+            </article>
+          </div>
+        </div>
+        <div class="title-foot">
+          <span>Running example: lecture notes in, a flashcard study app out.</span>
+          <span class="mono">← → to move · N notes · O contents</span>
+        </div>
+        <div class="notes" hidden>
+          <p>Welcome. This deck is a workshop, not a reference manual. The full handbook goes much deeper, and every section here maps to a part of it.</p>
+          <p>Set expectations: nobody needs to memorize commands. The goal is a working loop you can repeat on Monday.</p>
+          <p><strong>Running example:</strong> Maya, a first-year student, turns PSY 101 lecture notes into a small flashcard app. We will return to it in every section.</p>
+        </div>
+      </section>
+
+      <!-- 02 -->
+      <section class="slide" data-title="What you'll leave with" data-section="Introduction" aria-hidden="true">
+        <div class="slide-head">
+          <p class="eyebrow">What you'll leave with</p>
+          <h2>Think of this as a map. Nobody is grading you.</h2>
+          <p class="lede">By the end of the session, you can do six things. You do not need to remember every command.</p>
+        </div>
+        <div class="outcomes">
+          <div class="outcome"><span class="outcome-num">01</span><p><strong>Explain what an LLM does</strong> and when not to trust it.</p></div>
+          <div class="outcome"><span class="outcome-num">02</span><p><strong>Write a prompt</strong> that produces a usable first draft.</p></div>
+          <div class="outcome"><span class="outcome-num">03</span><p><strong>Install Claude Code</strong> and run a real session in a project folder.</p></div>
+          <div class="outcome"><span class="outcome-num">04</span><p><strong>Turn a repeated task into a skill</strong> the model can load.</p></div>
+          <div class="outcome"><span class="outcome-num">05</span><p><strong>Delegate a review to a subagent</strong> without flooding your context.</p></div>
+          <div class="outcome"><span class="outcome-num">06</span><p><strong>Choose a workflow</strong>: Superpowers, OpenSpec, or RAG.</p></div>
+        </div>
+        <div class="banner banner--accent"><strong>No prior experience assumed.</strong> If you can use a browser and a text file, you can follow along.</div>
+        <div class="notes" hidden>
+          <p>Read the six outcomes as a contract. Each one is demonstrated later in the deck.</p>
+          <p>The deck is intentionally shorter than the handbook. Use the handbook when you want the full explanation, exercises, and troubleshooting.</p>
+        </div>
+      </section>
+
+      <!-- 03 -->
+      <section class="slide" data-title="The route" data-section="Introduction" aria-hidden="true">
+        <div class="slide-head">
+          <p class="eyebrow">The route</p>
+          <h2>Four moves. One running example.</h2>
+          <p class="lede">Every section returns to the same small project: lecture notes in, a flashcard study app out.</p>
+        </div>
+        <div class="roadmap">
+          <div class="roadmap-step">
+            <span class="roadmap-num">01 · Understand</span>
+            <h3>The machine</h3>
+            <p>What an LLM is, and why it sounds right.</p>
+            <span class="roadmap-time">20 min</span>
+          </div>
+          <div class="roadmap-step">
+            <span class="roadmap-num">02 · Ask</span>
+            <h3>The brief</h3>
+            <p>Prompts that leave less room for guessing.</p>
+            <span class="roadmap-time">15 min</span>
+          </div>
+          <div class="roadmap-step">
+            <span class="roadmap-num">03 · Operate</span>
+            <h3>The agent</h3>
+            <p>Install, commands, context, permissions.</p>
+            <span class="roadmap-time">25 min</span>
+          </div>
+          <div class="roadmap-step">
+            <span class="roadmap-num">04 · Build</span>
+            <h3>The workflow</h3>
+            <p>Skills, subagents, Superpowers, OpenSpec, RAG.</p>
+            <span class="roadmap-time">30 min</span>
+          </div>
+        </div>
+        <div class="notes" hidden>
+          <p>Times are a guide, not a race. If the room is new to AI, spend more time in parts one and two.</p>
+          <p><strong>Handbook:</strong> Parts 1–5 follow this same route.</p>
+        </div>
+      </section>
+
+      <!-- 04 -->
+      <section class="slide slide--inverse" data-title="Understand the machine" data-section="Part 01 · Understand" aria-hidden="true">
+        <div class="section-grid">
+          <div class="section-num" aria-hidden="true">01</div>
+          <div class="section-copy">
+            <p class="eyebrow">Part one</p>
+            <h2>Understand the machine</h2>
+            <p class="lede">What an LLM actually does, and why fluent is not the same as true.</p>
+            <div class="section-topics"><span>Prediction</span><span>Context</span><span>Hallucination</span><span>Verification</span></div>
+          </div>
+        </div>
+        <div class="notes" hidden>
+          <p>Transition. We start with the mental model because every practical habit follows from it.</p>
+          <p>If the audience remembers one idea from this section, make it this: the model produces plausible text, not verified facts.</p>
+        </div>
+      </section>
+
+      <!-- 05 -->
+      <section class="slide" data-title="What an LLM is" data-section="Part 01 · Understand" aria-hidden="true">
+        <div class="slide-head">
+          <p class="eyebrow">The mechanism</p>
+          <h2>It predicts the next token. That is the whole trick.</h2>
+          <p class="lede">At sufficient scale, next-token prediction produces something that looks like reasoning. The machinery is still a guess about what comes next.</p>
+        </div>
+        <div class="cols cols--top">
+          <div class="stack">
+            <p class="lede" style="color: var(--ink);">It is completing a pattern. It is not consulting a source.</p>
+            <ul class="list">
+              <li>Trained on text, not on a database of verified facts.</li>
+              <li>Each token is sampled from a probability distribution.</li>
+              <li>The same prompt can produce a different answer.</li>
+            </ul>
+            <div class="banner banner--mark"><strong>Useful mental model:</strong> a very well-read improv partner with no fact-checker.</div>
+          </div>
+          <figure class="diagram">
+            <div class="predict">
+              <span class="predict-label">A prompt, one token short</span>
+              <p class="predict-sentence">The mitochondria is the <span class="blank">___</span></p>
+              <span class="predict-arrow">↓ next token</span>
+              <div class="token-row">
+                <span class="token token--chosen">powerhouse <b>87%</b></span>
+                <span class="token">battery <b>6%</b></span>
+                <span class="token">engine <b>3%</b></span>
+              </div>
+              <p class="small">It picks one, appends it, and repeats. That loop writes the paragraph.</p>
+            </div>
+            <figcaption>A token is a small chunk of text. The model scores what could come next, then samples.</figcaption>
+          </figure>
+        </div>
+        <div class="notes" hidden>
+          <p><strong>Handbook:</strong> Part 1.1–1.3 covers tokens, training, inference, and why the same prompt varies.</p>
+          <p>The percentages are illustrative. The important part is the shape: a distribution over candidates, then a sample.</p>
+          <p>Do not overclaim. Modern models can reason over text in useful ways. The point is that the output is generated, not retrieved from a truth store.</p>
+        </div>
+      </section>
+
+      <!-- 06 -->
+      <section class="slide" data-title="Three consequences" data-section="Part 01 · Understand" aria-hidden="true">
+        <div class="slide-head">
+          <p class="eyebrow">Three consequences</p>
+          <h2>Why it sounds right and is sometimes wrong.</h2>
+          <p class="lede">These are properties of the technology, not bugs you can patch with a better prompt.</p>
+        </div>
+        <div class="facts">
+          <div class="fact">
+            <span class="tag">Knowledge cutoff</span>
+            <h3>It does not know what happened after training.</h3>
+            <p>New papers, changed policies, and this morning's news may be missing or stale.</p>
+            <p class="fix"><strong>Fix:</strong> give it current sources, or use a tool that can search.</p>
+          </div>
+          <div class="fact">
+            <span class="tag">Hallucination</span>
+            <h3>It fills gaps with plausible text.</h3>
+            <p>A fake citation looks exactly like a real one until you check it.</p>
+            <p class="fix"><strong>Fix:</strong> require quotes, locations, and a source you can open.</p>
+          </div>
+          <div class="fact">
+            <span class="tag">Non-determinism</span>
+            <h3>The same prompt can give a different answer.</h3>
+            <p>Sampling makes the output vary. That is useful for brainstorming and risky for facts.</p>
+            <p class="fix"><strong>Fix:</strong> constrain the format, rerun, and compare.</p>
+          </div>
+        </div>
+        <div class="notes" hidden>
+          <p>Ask the room: which of these have you already seen? Most people have a hallucinated citation or a confident wrong answer story.</p>
+          <p><strong>Handbook:</strong> Part 1.5–1.6. The practical rule is to ground the model in sources and verify anything that matters.</p>
+        </div>
+      </section>
+
+      <!-- 07 -->
+      <section class="slide" data-title="Context window" data-section="Part 01 · Understand" aria-hidden="true">
+        <div class="slide-head">
+          <p class="eyebrow">Working memory</p>
+          <h2>The context window is a desk, not a filing cabinet.</h2>
+          <p class="lede">The model sees only what is on the desk right now. Everything else might as well not exist.</p>
+        </div>
+        <div class="cols">
+          <figure class="diagram">
+            <div class="desk-map">
+              <div class="desk-block desk-block--wide">System prompt + CLAUDE.md</div>
+              <div class="desk-block">Files you @-mention</div>
+              <div class="desk-block">Conversation so far</div>
+              <div class="desk-block">Tool output</div>
+              <div class="desk-block desk-block--free">Free space</div>
+            </div>
+            <figcaption>Everything on the desk is visible to the model. The filing cabinet is not.</figcaption>
+          </figure>
+          <div class="stack">
+            <ul class="list">
+              <li><strong>Relevance beats volume.</strong> Irrelevant context dilutes attention.</li>
+              <li><strong>One task per session.</strong> Switch tasks, start clean.</li>
+              <li><strong>Use the right command.</strong> <code>/clear</code> when you switch; <code>/compact</code> when a long session must continue.</li>
+            </ul>
+            <div class="banner banner--accent"><strong>In Claude Code,</strong> the desk is assembled fresh each turn from the conversation, your files, and tool results.</div>
+          </div>
+        </div>
+        <div class="notes" hidden>
+          <p><strong>Handbook:</strong> Part 1.6 and Part 3.5. The desk metaphor is the one to keep.</p>
+          <p>If the model seems to forget something, ask what is actually in context. A file on disk is not automatically on the desk.</p>
+        </div>
+      </section>
+
+      <!-- 08 -->
+      <section class="slide" data-title="Chatbot vs. agent" data-section="Part 01 · Understand" aria-hidden="true">
+        <div class="slide-head">
+          <p class="eyebrow">Chat vs. agent</p>
+          <h2>A chatbot answers. An agent acts.</h2>
+          <p class="lede">The model is the brain. The tools are the hands. You are the judgment.</p>
+        </div>
+        <div class="cols">
+          <div class="stack">
+            <div class="banner"><strong>Chatbot:</strong> you paste text, it replies, you copy the answer.</div>
+            <div class="banner banner--accent"><strong>Agent:</strong> it reads files, runs commands, edits files, checks results, and repeats.</div>
+            <p class="small">Claude Code works on your project folder. That folder is the shared workspace between you and the agent.</p>
+          </div>
+          <figure class="diagram">
+            <svg viewBox="0 0 360 300" role="img" aria-label="Agent loop: you ask, the model plans, a tool runs, the result returns, and the loop repeats until done.">
+              <defs>
+                <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                  <path d="M0,0 L10,5 L0,10 z" class="arrowhead"></path>
+                </marker>
+              </defs>
+              <rect class="diagram-node" x="110" y="16" width="140" height="48" rx="4"></rect>
+              <text class="diagram-label" x="180" y="40" text-anchor="middle" dominant-baseline="middle">You ask</text>
+              <text class="diagram-sub" x="180" y="54" text-anchor="middle">a goal</text>
+
+              <rect class="diagram-node" x="230" y="108" width="120" height="52" rx="4"></rect>
+              <text class="diagram-label" x="290" y="130" text-anchor="middle" dominant-baseline="middle">Model plans</text>
+              <text class="diagram-sub" x="290" y="145" text-anchor="middle">picks a tool</text>
+
+              <rect class="diagram-node diagram-node--accent" x="110" y="236" width="140" height="48" rx="4"></rect>
+              <text class="diagram-label" x="180" y="255" text-anchor="middle" dominant-baseline="middle">Tool runs</text>
+              <text class="diagram-sub" x="180" y="270" text-anchor="middle">read · edit · test</text>
+
+              <rect class="diagram-node" x="10" y="108" width="120" height="52" rx="4"></rect>
+              <text class="diagram-label" x="70" y="130" text-anchor="middle" dominant-baseline="middle">Result returns</text>
+              <text class="diagram-sub" x="70" y="145" text-anchor="middle">output or error</text>
+
+              <path class="diagram-arrow" d="M250 40 C275 40 290 70 290 108"></path>
+              <path class="diagram-arrow" d="M290 160 C290 200 275 260 250 260"></path>
+              <path class="diagram-arrow" d="M110 260 C85 260 70 200 70 160"></path>
+              <path class="diagram-arrow" d="M70 108 C70 70 85 40 110 40"></path>
+
+              <text class="diagram-muted" x="180" y="148" text-anchor="middle">repeat</text>
+              <text class="diagram-muted" x="180" y="161" text-anchor="middle">until done</text>
+            </svg>
+            <figcaption>The agent loop: plan, act, observe, repeat. The loop stops when the task is done or when you stop it.</figcaption>
+          </figure>
+        </div>
+        <div class="notes" hidden>
+          <p><strong>Handbook:</strong> Part 1.4 and Part 3.2. A chatbot produces text; an agent changes state in a workspace.</p>
+          <p>This is why permissions matter. Once the model can run tools, a wrong action can change a file or run a command.</p>
+        </div>
+      </section>
+
+      <!-- 09 -->
+      <section class="slide" data-title="Strengths and limits" data-section="Part 01 · Understand" aria-hidden="true">
+        <div class="slide-head">
+          <p class="eyebrow">Fit</p>
+          <h2>Use it where it is strong.</h2>
+          <p class="lede">The same tool can be excellent and useless in the same afternoon. The task decides.</p>
+        </div>
+        <div class="cols">
+          <div class="stack">
+            <span class="tag tag--good">Strong</span>
+            <ul class="list">
+              <li>Drafting, rewriting, and changing tone.</li>
+              <li>Summarizing and explaining material you provide.</li>
+              <li>Transforming text into tables, cards, or code.</li>
+              <li>Brainstorming options and finding patterns.</li>
+              <li>Writing and debugging code with tests.</li>
+            </ul>
+          </div>
+          <div class="stack">
+            <span class="tag tag--bad">Weak without help</span>
+            <ul class="list list--bad">
+              <li>Facts after its training cutoff.</li>
+              <li>Precise arithmetic without a tool.</li>
+              <li>Citations recalled from memory.</li>
+              <li>Knowing your intent without context.</li>
+              <li>High-stakes decisions that need accountability.</li>
+              <li>Anything involving secrets or private data.</li>
+            </ul>
+          </div>
+        </div>
+        <div class="banner"><strong>Ground it. Check it. Or do not ship it.</strong> That sentence covers most of the safety advice in this deck.</div>
+        <div class="notes" hidden>
+          <p><strong>Handbook:</strong> Part 1.7. Give concrete examples from study, writing, and coding.</p>
+          <p>The list is not permanent. Models improve. The habit is to ask: what would count as evidence that this answer is right?</p>
+        </div>
+      </section>
+
+      <!-- 10 -->
+      <section class="slide" data-title="Hallucination" data-section="Part 01 · Understand" aria-hidden="true">
+        <div class="slide-head">
+          <p class="eyebrow">Hallucination</p>
+          <h2>Confidence is a style. It is not evidence.</h2>
+          <p class="lede">A fabricated citation is not a rare glitch. It is the same next-token machinery doing exactly what it was trained to do.</p>
+        </div>
+        <div class="cols">
+          <div class="stack">
+            <div class="predict" style="border-color: var(--margin);">
+              <span class="predict-label" style="color: var(--margin);">An illustrative citation</span>
+              <p class="predict-sentence" style="font-size: 1.1rem;">“Example et al. (2023) found that sleep improves recall by 40%.”</p>
+              <p class="small">Journal of Illustrative Results, 12(3), 44–58.</p>
+              <span class="tag tag--bad">No such paper</span>
+            </div>
+            <p class="small">The model is not lying. It is completing a plausible pattern.</p>
+          </div>
+          <div class="stack">
+            <h3>Three verification habits</h3>
+            <ul class="list">
+              <li><strong>Give it the source.</strong> Ask it to answer only from the text you provide.</li>
+              <li><strong>Require quotes and locations.</strong> A page number or section heading makes the claim checkable.</li>
+              <li><strong>Cross-check names, numbers, and citations.</strong> Open the link or search the DOI yourself.</li>
+            </ul>
+            <div class="banner banner--mark"><strong>If you cannot verify it,</strong> describe it as a draft, not a fact.</div>
+          </div>
+        </div>
+        <div class="notes" hidden>
+          <p><strong>Handbook:</strong> Part 1.5 and Part 2.6. The citation is clearly labeled as illustrative; do not present it as real.</p>
+          <p>Ask the audience for a time they trusted a confident answer. Then ask what checking would have cost. Usually it is one search.</p>
+        </div>
+      </section>
+
+      <!-- 11 -->
+      <section class="slide" data-title="Three rules" data-section="Part 01 · Understand" aria-hidden="true">
+        <div class="slide-head">
+          <p class="eyebrow">The rules</p>
+          <h2>Three rules for every session.</h2>
+          <p class="lede">They apply to a study session, a coding task, and a group project.</p>
+        </div>
+        <div class="facts">
+          <div class="fact">
+            <span class="outcome-num">01</span>
+            <h3>Verify before you rely.</h3>
+            <p>Every fact, quote, and citation gets a second look. The model's confidence tells you nothing about its accuracy.</p>
+          </div>
+          <div class="fact">
+            <span class="outcome-num">02</span>
+            <h3>Protect private data.</h3>
+            <p>No passwords, medical records, or other people's work without permission. Check your school's policy.</p>
+          </div>
+          <div class="fact">
+            <span class="outcome-num">03</span>
+            <h3>Keep your own thinking.</h3>
+            <p>Use AI to sharpen a draft, not to replace your judgment. You own the claim and the error.</p>
+          </div>
+        </div>
+        <div class="banner banner--accent"><strong>AI can write the draft. You own the claim.</strong> That is the line to remember when a deadline is close.</div>
+        <div class="notes" hidden>
+          <p><strong>Handbook:</strong> Part 1.9 and Part 7.6. Academic integrity policies vary by institution and by assignment.</p>
+          <p>If you are unsure, ask the instructor before you use AI on graded work. Keep your drafts so you can show your process.</p>
+        </div>
+      </section>
+
+      <!-- 12 -->
+      <section class="slide slide--inverse" data-title="Ask better" data-section="Part 02 · Ask" aria-hidden="true">
+        <div class="section-grid">
+          <div class="section-num" aria-hidden="true">02</div>
+          <div class="section-copy">
+            <p class="eyebrow">Part two</p>
+            <h2>Ask better</h2>
+            <p class="lede">Prompting is briefing. The goal is to leave less room for guessing.</p>
+            <div class="section-topics"><span>The six-part brief</span><span>Techniques</span><span>Patterns</span><span>Injection</span></div>
+          </div>
+        </div>
+        <div class="notes" hidden>
+          <p>Transition. The model is a guesser. A prompt is how you narrow the space of plausible answers.</p>
+          <p>This section is practical. The audience should leave with a template and a few habits, not a theory of prompt engineering.</p>
+        </div>
+      </section>
+
+      <!-- 13 -->
+      <section class="slide" data-title="The six-part prompt" data-section="Part 02 · Ask" aria-hidden="true">
+        <div class="slide-head">
+          <p class="eyebrow">The brief</p>
+          <h2>A good prompt is a brief.</h2>
+          <p class="lede">Six parts. When an answer disappoints, one of them is usually missing.</p>
+        </div>
+        <div class="cols">
+          <div class="stack stack--tight">
+            <div class="banner"><strong>Role:</strong> Who should it act as?</div>
+            <div class="banner"><strong>Task:</strong> What exactly should it do?</div>
+            <div class="banner"><strong>Context:</strong> What does it need to know?</div>
+            <div class="banner"><strong>Input:</strong> What material should it use?</div>
+            <div class="banner"><strong>Rules:</strong> What must it avoid?</div>
+            <div class="banner"><strong>Output:</strong> What shape should the answer take?</div>
+          </div>
+          <div class="stack">
+            <span class="code-label">A complete brief</span>
+            <pre class="code"><code>Role: PSY 101 tutor.
+Task: Make 10 flashcards.
+Context: Exam covers lectures 1–3.
+Input: @notes/lecture-03.md
+Rules: One idea per card; no yes/no;
+       use only the notes.
+Output: cards.md format.</code></pre>
+            <p class="small">The labels are a checklist, not a ritual. Short prompts can still be complete.</p>
+          </div>
+        </div>
+        <div class="notes" hidden>
+          <p><strong>Handbook:</strong> Part 2.2. The six parts are role, task, context, input, rules, and output.</p>
+          <p>Do not add all six every time. Add the ones that remove ambiguity for this task. “Role” is useful for vocabulary and standards, not magic.</p>
+        </div>
+      </section>
+
+      <!-- 14 -->
+      <section class="slide" data-title="Before and after" data-section="Part 02 · Ask" aria-hidden="true">
+        <div class="slide-head">
+          <p class="eyebrow">Before / after</p>
+          <h2>Same task. Different brief.</h2>
+          <p class="lede">The weak prompt is not wrong. It is under-specified, so the model fills the gaps for you.</p>
+        </div>
+        <div class="cols">
+          <div class="stack">
+            <div class="code-label"><span>Before</span><span class="tag tag--bad">Vague</span></div>
+            <pre class="code"><code>Summarize this article.</code></pre>
+            <p class="small">Missing: audience, length, structure, and a rule for claims outside the article.</p>
+          </div>
+          <div class="stack">
+            <div class="code-label"><span>After</span><span class="tag tag--good">Usable</span></div>
+            <pre class="code"><code>You are a research assistant.
+Summarize this article for a student
+who has 10 minutes. Use 5 bullets,
+one per section. Quote the thesis.
+If a claim is not in the article, say so.</code></pre>
+            <p class="small">What changed: role, audience, shape, grounding.</p>
+          </div>
+        </div>
+        <div class="mini-loop" aria-label="What changed">
+          <span>Role</span><i>→</i><span>Audience</span><i>→</i><span>Shape</span><i>→</i><span>Grounding</span>
+        </div>
+        <div class="notes" hidden>
+          <p><strong>Handbook:</strong> Part 2.2–2.3. The “after” prompt is longer, but most of the length is information the model would otherwise invent.</p>
+          <p>Ask the room to rewrite “make me flashcards for psych” using the six parts. That is the exercise in the handbook.</p>
+        </div>
+      </section>
+
+      <!-- 15 -->
+      <section class="slide" data-title="Techniques 1–3" data-section="Part 02 · Ask" aria-hidden="true">
+        <div class="slide-head">
+          <p class="eyebrow">Techniques 1–3</p>
+          <h2>Three moves that fix most prompts.</h2>
+          <p class="lede">Specificity is not about sounding formal. It is about reducing the number of plausible answers.</p>
+        </div>
+        <div class="facts">
+          <div class="fact">
+            <span class="outcome-num">01</span>
+            <h3>Specify the output.</h3>
+            <p>Length, format, audience, constraints. If the shape matters, say it.</p>
+            <p class="fix"><strong>Try:</strong> “Answer in five bullets for a first-year student.”</p>
+          </div>
+          <div class="fact">
+            <span class="outcome-num">02</span>
+            <h3>Show an example.</h3>
+            <p>One good example teaches style faster than a paragraph of rules.</p>
+            <p class="fix"><strong>Try:</strong> “Here are two cards I like. Match their style.”</p>
+          </div>
+          <div class="fact">
+            <span class="outcome-num">03</span>
+            <h3>Plan first.</h3>
+            <p>Ask for the steps and the files before any edits. You can catch a wrong direction early.</p>
+            <p class="fix"><strong>Try:</strong> “List a plan. Do not edit yet.”</p>
+          </div>
+        </div>
+        <div class="banner banner--accent"><strong>Plan-first is also how plan mode works in Claude Code.</strong> You will see it again in Part 3.</div>
+        <div class="notes" hidden>
+          <p><strong>Handbook:</strong> Part 2.3. Few-shot examples, output schemas, and plan-first prompting.</p>
+          <p>Ask for a plan is often the single highest-leverage line for a beginner. It turns a surprise into a conversation.</p>
+        </div>
+      </section>
+
+      <!-- 16 -->
+      <section class="slide" data-title="Techniques 4–6" data-section="Part 02 · Ask" aria-hidden="true">
+        <div class="slide-head">
+          <p class="eyebrow">Techniques 4–6</p>
+          <h2>Then make it a conversation.</h2>
+          <p class="lede">The first answer is a draft. The useful work happens in the next turn.</p>
+        </div>
+        <div class="facts">
+          <div class="fact">
+            <span class="outcome-num">04</span>
+            <h3>Let it ask.</h3>
+            <p>“What do you need from me before you start?” surfaces assumptions early.</p>
+          </div>
+          <div class="fact">
+            <span class="outcome-num">05</span>
+            <h3>Require evidence.</h3>
+            <p>“Quote the source. Mark uncertainty.” A confident answer without a source is a lead, not a fact.</p>
+          </div>
+          <div class="fact">
+            <span class="outcome-num">06</span>
+            <h3>Iterate.</h3>
+            <p>“Critique this against the brief, then revise.” You get a second pass without starting over.</p>
+          </div>
+        </div>
+        <div class="mini-loop" aria-label="The revision loop">
+          <span>Draft</span><i>→</i><span>Critique</span><i>→</i><span>Revise</span><i>→</i><span>Check</span>
+        </div>
+        <div class="notes" hidden>
+          <p><strong>Handbook:</strong> Part 2.4–2.5. The critique-and-revise loop is the most reusable pattern in the deck.</p>
+          <p>Show a live example if possible: ask for a draft, then ask “what is weak, and what would you change?” The second answer is usually better.</p>
+        </div>
+      </section>
+
+      <!-- 17 -->
+      <section class="slide" data-title="Prompt library" data-section="Part 02 · Ask" aria-hidden="true">
+        <div class="slide-head">
+          <p class="eyebrow">Prompt library</p>
+          <h2>Six prompts worth stealing.</h2>
+          <p class="lede">Adapt the wording to your course and your voice. Keep the ones that save you time.</p>
+        </div>
+        <div class="playbook">
+          <div class="play">
+            <h3>Explain</h3>
+            <p>Build intuition before memorization.</p>
+            <p class="prompt">“Explain X to a first-year student with one analogy and one worked example.”</p>
+          </div>
+          <div class="play">
+            <h3>Study</h3>
+            <p>Turn notes into retrieval practice.</p>
+            <p class="prompt">“Turn these notes into 10 retrieval-practice questions. Keep the answer key separate.”</p>
+          </div>
+          <div class="play">
+            <h3>Critique</h3>
+            <p>Get feedback against a real rubric.</p>
+            <p class="prompt">“Review this draft against the rubric. Quote the line and name the fix.”</p>
+          </div>
+          <div class="play">
+            <h3>Debug</h3>
+            <p>Find the cheapest test first.</p>
+            <p class="prompt">“Here is the error and the file. List three hypotheses, then test the cheapest one.”</p>
+          </div>
+          <div class="play">
+            <h3>Research</h3>
+            <p>Keep the model inside your sources.</p>
+            <p class="prompt">“Summarize only from these sources. Cite page numbers and mark gaps.”</p>
+          </div>
+          <div class="play">
+            <h3>Plan</h3>
+            <p>Make the work visible before you start.</p>
+            <p class="prompt">“Ask me clarifying questions, then propose a plan with risks.”</p>
+          </div>
+        </div>
+        <div class="notes" hidden>
+          <p><strong>Handbook:</strong> Part 2.5 and Appendix B have a larger prompt library.</p>
+          <p>Encourage students to keep a personal file of prompts that worked. A prompt library is a study skill, not a collection of magic words.</p>
+        </div>
+      </section>
+
+      <!-- 18 -->
+      <section class="slide" data-title="Anti-patterns" data-section="Part 02 · Ask" aria-hidden="true">
+        <div class="slide-head">
+          <p class="eyebrow">Failure modes</p>
+          <h2>What not to do.</h2>
+          <p class="lede">Most bad AI sessions are not model failures. They are missing context, missing verification, or missing boundaries.</p>
+        </div>
+        <div class="cols">
+          <div class="stack">
+            <ul class="list list--bad">
+              <li><strong>“Do my assignment.”</strong> No context, no learning, and probably a policy violation.</li>
+              <li><strong>“Make it better.”</strong> No target. Better for whom, and by what measure?</li>
+              <li><strong>“It sounds confident.”</strong> Confidence is not evidence.</li>
+              <li><strong>“Paste everything.”</strong> Context dilution makes the important part harder to find.</li>
+              <li><strong>“Trust the citation.”</strong> Open it. Search it. Check it.</li>
+            </ul>
+          </div>
+          <div class="stack">
+            <div class="banner"><strong>Prompt injection:</strong> anything the model reads can contain instructions. A PDF, a web page, or a GitHub issue can say “ignore previous instructions.” Treat that text as data, not as a command from you.</div>
+            <p class="small">Keep a human in the loop for anything that matters: sending, deleting, paying, submitting, or publishing.</p>
+          </div>
+        </div>
+        <div class="notes" hidden>
+          <p><strong>Handbook:</strong> Part 2.7 and Part 8.5. Prompt injection is a security issue, not just a prompting issue.</p>
+          <p>The practical rule: separate instructions you wrote from content the model fetched. If a document tells the agent to do something, that is a red flag.</p>
+        </div>
+      </section>
+
+      <!-- 19 -->
+      <section class="slide slide--inverse" data-title="Operate the agent" data-section="Part 03 · Operate" aria-hidden="true">
+        <div class="section-grid">
+          <div class="section-num" aria-hidden="true">03</div>
+          <div class="section-copy">
+            <p class="eyebrow">Part three</p>
+            <h2>Operate the agent</h2>
+            <p class="lede">Claude Code gives the model hands: files, a shell, search, and a loop.</p>
+            <div class="section-topics"><span>Install</span><span>Interface</span><span>Commands</span><span>Context</span><span>Permissions</span></div>
+          </div>
+        </div>
+        <div class="notes" hidden>
+          <p>Transition. This is the practical core. By the end of this section, the audience should be able to open a project and run a safe first session.</p>
+        </div>
+      </section>
+
+      <!-- 20 -->
+      <section class="slide" data-title="What Claude Code is" data-section="Part 03 · Operate" aria-hidden="true">
+        <div class="slide-head">
+          <p class="eyebrow">What it is</p>
+          <h2>One folder. One agent. A loop.</h2>
+          <p class="lede">Claude Code works on your project folder. It reads, edits, runs commands, and checks results.</p>
+        </div>
+        <div class="facts">
+          <div class="fact">
+            <span class="tag">The model</span>
+            <h3>Reads and reasons.</h3>
+            <p>It plans the next step, chooses a tool, and interprets what comes back.</p>
+          </div>
+          <div class="fact">
+            <span class="tag">The tools</span>
+            <h3>Files, shell, search, web.</h3>
+            <p>Reading, writing, editing, running tests, searching a codebase, and looking things up.</p>
+          </div>
+          <div class="fact">
+            <span class="tag">You</span>
+            <h3>Goal, permissions, review.</h3>
+            <p>You set the task, approve risky actions, and decide whether the result is good.</p>
+          </div>
+        </div>
+        <div class="banner banner--accent"><strong>The model is the brain. The tools are the hands. You are the judgment.</strong></div>
+        <div class="notes" hidden>
+          <p><strong>Handbook:</strong> Part 3.2–3.4. Claude Code is available in the terminal, desktop app, IDE extensions, and on the web.</p>
+          <p>It is not autocomplete. The unit of work is a task in a folder, and the output is a changed workspace plus a conversation.</p>
+        </div>
+      </section>
+
+      <!-- 21 -->
+      <section class="slide" data-title="Install" data-section="Part 03 · Operate" aria-hidden="true">
+        <div class="slide-head">
+          <p class="eyebrow">Install</p>
+          <h2>From install to first answer.</h2>
+          <p class="lede">Three steps. The native installer is the default; npm is an alternative for people who already use Node.</p>
+        </div>
+        <div class="cols cols--wide-left">
+          <div class="stack stack--tight">
+            <div class="code-label"><span>1 · Install</span><span>PowerShell</span></div>
+            <pre class="code"><code>irm https://claude.ai/install.ps1 | iex</code></pre>
+            <div class="code-label"><span>1 · Install</span><span>macOS / Linux</span></div>
+            <pre class="code"><code>curl -fsSL https://claude.ai/install.sh | bash</code></pre>
+            <div class="code-label"><span>2 · Check</span><span>any shell</span></div>
+            <pre class="code"><code>claude doctor</code></pre>
+            <div class="code-label"><span>3 · Open a project</span><span>any shell</span></div>
+            <pre class="code"><code>cd flashcards
+claude</code></pre>
+          </div>
+          <div class="stack">
+            <h3>Before you type</h3>
+            <ul class="list">
+              <li>A paid Claude plan is required.</li>
+              <li>If <code>claude</code> is not found, restart the terminal.</li>
+              <li>Do not use <code>sudo</code> with the native installer.</li>
+              <li>npm alternative: Node.js 22+ and <code>npm install -g @anthropic-ai/claude-code</code>.</li>
+            </ul>
+            <div class="banner banner--mark"><strong>First session:</strong> run <code>/status</code> to confirm your account, model, and connection.</div>
+          </div>
+        </div>
+        <div class="notes" hidden>
+          <p><strong>Handbook:</strong> Part 3.1–3.2. On native Windows, use PowerShell. Git Bash is no longer required.</p>
+          <p>If installation fails, run <code>claude doctor</code> and read the first error. Do not stack fixes. Solve one error at a time.</p>
+        </div>
+      </section>
+
+      <!-- 22 -->
+      <section class="slide" data-title="The interface" data-section="Part 03 · Operate" aria-hidden="true">
+        <div class="slide-head">
+          <p class="eyebrow">The interface</p>
+          <h2>Four keys do most of the work.</h2>
+          <p class="lede">You type in plain language. These four keys give the agent context and power.</p>
+        </div>
+        <div class="cols">
+          <div class="term">
+            <div class="term-bar">terminal · ~/flashcards</div>
+            <div class="term-body"><span class="prompt">&gt;</span> @notes/lecture-03.md make 10 cards
+<span class="out">Reading notes/lecture-03.md...</span>
+<span class="prompt">&gt;</span> !python flashcards.py --check
+<span class="out">OK: 24 cards</span>
+<span class="prompt">&gt;</span> /context
+<span class="out">34% of context used</span>
+            </div>
+          </div>
+          <div class="stack stack--tight">
+            <div class="banner"><strong><code>@</code> reference a file.</strong> Puts the file's contents into the conversation.</div>
+            <div class="banner"><strong><code>!</code> run a shell command.</strong> The output comes back into context.</div>
+            <div class="banner"><strong><code>/</code> run a command.</strong> Examples: <code>/status</code>, <code>/clear</code>, <code>/plan</code>.</div>
+            <div class="banner"><strong><code>Shift+Tab</code> change mode.</strong> Manual, accept-edits, plan, auto, or bypass.</div>
+          </div>
+        </div>
+        <p class="small"><code>Esc</code> interrupt · <code>Esc Esc</code> rewind on an empty prompt · <code>Ctrl+C</code> cancel · <code>Ctrl+D</code> exit.</p>
+        <div class="notes" hidden>
+          <p><strong>Handbook:</strong> Part 3.3–3.4. The <code>@</code> reference is not email; it injects a file. The <code>!</code> command puts output into the conversation.</p>
+          <p><code>Shift+Tab</code> cycles permission modes. Watch the mode indicator. Recent versions may start in auto mode, which is convenient but less cautious for a beginner.</p>
+        </div>
+      </section>
+
+      <!-- 23 -->
+      <section class="slide" data-title="Command map" data-section="Part 03 · Operate" aria-hidden="true">
+        <div class="slide-head">
+          <p class="eyebrow">Command map</p>
+          <h2>The commands worth remembering.</h2>
+          <p class="lede">You do not need the whole list. Start with four commands and add the rest when a task asks for them.</p>
+        </div>
+        <div class="command-grid">
+          <div class="command-group">
+            <h3>Start here</h3>
+            <ul>
+              <li><code>/init</code><span>Draft a project <code>CLAUDE.md</code> from the codebase.</span></li>
+              <li><code>/status</code><span>Check version, model, account, and connection.</span></li>
+              <li><code>/model</code><span>Switch models for the session.</span></li>
+            </ul>
+          </div>
+          <div class="command-group">
+            <h3>Context</h3>
+            <ul>
+              <li><code>/context</code><span>See what is filling the context window.</span></li>
+              <li><code>/compact</code><span>Summarize the conversation and continue.</span></li>
+              <li><code>/clear</code><span>Start a fresh conversation for a new task.</span></li>
+            </ul>
+          </div>
+          <div class="command-group">
+            <h3>Review</h3>
+            <ul>
+              <li><code>/diff</code><span>Inspect the changes made in the session.</span></li>
+              <li><code>/rewind</code><span>Restore a checkpoint after a wrong turn.</span></li>
+              <li><code>/export</code><span>Save the conversation for later.</span></li>
+            </ul>
+          </div>
+          <div class="command-group">
+            <h3>Setup</h3>
+            <ul>
+              <li><code>/permissions</code><span>Manage allow and deny rules.</span></li>
+              <li><code>/config</code><span>Open settings, including editor mode.</span></li>
+              <li><code>/memory</code><span>Edit memory files and project instructions.</span></li>
+            </ul>
+          </div>
+        </div>
+        <div class="banner banner--accent"><strong>Start with <code>/init</code>, <code>/context</code>, <code>/diff</code>, and <code>/rewind</code>.</strong> Type <code>/help</code> for the rest.</div>
+        <div class="notes" hidden>
+          <p><strong>Handbook:</strong> Part 3.4 and Appendix A. Aliases: <code>/cost</code> maps to <code>/usage</code>; <code>/checkpoint</code> maps to <code>/rewind</code>; <code>/review</code> maps to <code>/code-review</code>.</p>
+          <p>The old <code>#</code> quick-memory shortcut and the old <code>/vim</code> command are gone. Use <code>/memory</code> and the editor mode in <code>/config</code> instead.</p>
+        </div>
+      </section>
+
+      <!-- 24 -->
+      <section class="slide" data-title="Context management" data-section="Part 03 · Operate" aria-hidden="true">
+        <div class="slide-head">
+          <p class="eyebrow">Context</p>
+          <h2>Keep the desk clean.</h2>
+          <p class="lede">Long sessions do not just cost more. They make it harder for the model to find the part that matters.</p>
+        </div>
+        <div class="cols">
+          <figure class="diagram">
+            <div class="desk-map">
+              <div class="desk-block desk-block--wide">Instructions and <code>CLAUDE.md</code></div>
+              <div class="desk-block">Files you @-mention</div>
+              <div class="desk-block">Conversation</div>
+              <div class="desk-block">Tool output</div>
+              <div class="desk-block desk-block--free">Free space</div>
+            </div>
+            <figcaption>What the model can see right now. Everything else is off the desk.</figcaption>
+          </figure>
+          <div class="stack">
+            <div class="banner"><strong><code>/context</code></strong> shows what is on the desk. Look before you add more.</div>
+            <div class="banner"><strong><code>/compact</code></strong> summarizes and continues. Use it when a long session must keep going.</div>
+            <div class="banner"><strong><code>/clear</code></strong> starts fresh. Use it when you switch tasks or the conversation gets tangled.</div>
+            <p class="small">Stable project rules belong in <code>CLAUDE.md</code>, not in every prompt.</p>
+          </div>
+        </div>
+        <div class="notes" hidden>
+          <p><strong>Handbook:</strong> Part 3.5. One task per session is the simplest rule that prevents most context problems.</p>
+          <p>If the agent starts repeating itself or ignoring instructions, clear and restate the task. Do not keep adding corrections to a polluted context.</p>
+        </div>
+      </section>
+
+      <!-- 25 -->
+      <section class="slide" data-title="CLAUDE.md" data-section="Part 03 · Operate" aria-hidden="true">
+        <div class="slide-head">
+          <p class="eyebrow">Project memory</p>
+          <h2>Write the rules once.</h2>
+          <p class="lede">A short project file saves you from repeating the same instructions every session.</p>
+        </div>
+        <div class="cols cols--wide-left">
+          <pre class="code"><code><span class="c"># Flashcards project</span>
+
+<span class="c">## Commands</span>
+- Test: python -m unittest discover
+- Check: python flashcards.py --check
+
+<span class="c">## Conventions</span>
+- Python 3.10+, standard library only.
+- cards.md is the source of truth.
+- Never edit files in notes/.
+
+<span class="c">## Done</span>
+Tests pass; quiz.html opens in a browser.</code></pre>
+          <div class="stack">
+            <h3>Where it lives</h3>
+            <ul class="list">
+              <li><strong>Project:</strong> <code>./CLAUDE.md</code>, committed to the repo.</li>
+              <li><strong>You:</strong> <code>~/.claude/CLAUDE.md</code>, for personal preferences.</li>
+              <li><strong>Local:</strong> <code>CLAUDE.local.md</code>, gitignored.</li>
+            </ul>
+            <p class="small">Draft it with <code>/init</code>. Keep it under 200 lines. It is context, not enforcement.</p>
+            <div class="banner banner--mark"><strong>If a rule must never be broken,</strong> use permissions, not prose.</div>
+          </div>
+        </div>
+        <div class="notes" hidden>
+          <p><strong>Handbook:</strong> Part 3.6. The file is loaded as context, so it can be ignored or overridden by other context. It is not a security boundary.</p>
+          <p>Good <code>CLAUDE.md</code> content: commands, conventions, definitions of done, and a few things never to touch. Bad content: a novel about the project.</p>
+        </div>
+      </section>
+
+      <!-- 26 -->
+      <section class="slide" data-title="Permissions" data-section="Part 03 · Operate" aria-hidden="true">
+        <div class="slide-head">
+          <p class="eyebrow">Permissions</p>
+          <h2>The agent asks before it acts. Keep it that way.</h2>
+          <p class="lede">Permission mode is the most important safety control in Claude Code. Check it before you type.</p>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Mode</th><th>What it does</th><th>Use it when</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>Manual / default</td><td>Asks before each sensitive action.</td><td>Learning, or working in an unfamiliar repo.</td></tr>
+              <tr><td>Accept edits</td><td>Auto-approves file edits.</td><td>You trust the task and will review the diff.</td></tr>
+              <tr><td>Plan</td><td>Read-only. Proposes a plan.</td><td>Before a large or risky change.</td></tr>
+              <tr><td>Auto</td><td>A classifier decides what is safe.</td><td>Fast work when you will still review.</td></tr>
+              <tr><td>Don't ask</td><td>Runs pre-approved tools only; blocks the rest.</td><td>Scripted or constrained workflows.</td></tr>
+              <tr><td>Bypass</td><td>Never asks. Full access.</td><td>Isolated containers and throwaway VMs only.</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="banner"><strong>Never run <code>--dangerously-skip-permissions</code> on your real machine.</strong> It maps to bypass mode. Use it only in an isolated environment you can throw away.</div>
+        <p class="small">Recent versions may start in auto mode. Watch the mode indicator, especially while learning.</p>
+        <div class="notes" hidden>
+          <p><strong>Handbook:</strong> Part 3.7 and Part 8.3. Deny rules for secrets belong in settings. Sandboxing is not available on native Windows, so isolation is even more important.</p>
+          <p>Habits: use git, read the diff, keep backups, and never point an agent at a folder you cannot restore.</p>
+        </div>
+      </section>
+
+      <!-- 27 -->
+      <section class="slide slide--inverse" data-title="Build the workflow" data-section="Part 04 · Build" aria-hidden="true">
+        <div class="section-grid">
+          <div class="section-num" aria-hidden="true">04</div>
+          <div class="section-copy">
+            <p class="eyebrow">Part four</p>
+            <h2>Build the workflow</h2>
+            <p class="lede">One small project: lecture notes in, a flashcard study app out.</p>
+            <div class="section-topics"><span>Project</span><span>Skills</span><span>Subagents</span><span>Superpowers</span><span>OpenSpec</span><span>RAG</span></div>
+          </div>
+        </div>
+        <div class="notes" hidden>
+          <p>Transition. Everything from here plugs into the same folder. The point is to show how the pieces compose, not to teach six unrelated tools.</p>
+        </div>
+      </section>
+
+      <!-- 28 -->
+      <section class="slide" data-title="The running example" data-section="Part 04 · Build" aria-hidden="true">
+        <div class="slide-head">
+          <p class="eyebrow">The running example</p>
+          <h2>Lecture notes → flashcards.</h2>
+          <p class="lede">The project is small enough to finish in a session and real enough to use for an exam.</p>
+        </div>
+        <div class="cols cols--wide-left">
+          <pre class="code"><code>flashcards/
+├── notes/
+│   ├── lecture-01.md
+│   ├── lecture-02.md
+│   └── lecture-03.md
+├── cards.md
+├── flashcards.py
+├── test_flashcards.py
+├── quiz.html
+├── CLAUDE.md
+└── .claude/
+    ├── skills/make-cards/SKILL.md
+    └── agents/card-reviewer.md</code></pre>
+          <div class="stack">
+            <div class="banner"><strong>Source:</strong> <code>notes/</code> is read-only material.</div>
+            <div class="banner"><strong>Truth:</strong> <code>cards.md</code> holds the cards.</div>
+            <div class="banner"><strong>Output:</strong> <code>cards.csv</code> and <code>quiz.html</code>.</div>
+            <div class="banner"><strong>App:</strong> <code>flashcards.py</code> parses, exports, quizzes, and checks.</div>
+            <p class="small">Python standard library only. That keeps setup boring, which is a feature.</p>
+          </div>
+        </div>
+        <div class="notes" hidden>
+          <p><strong>Handbook:</strong> Part 6 walks through this project from an empty folder to a working app.</p>
+          <p>The folder is deliberately small. The same skills and subagents would work in a larger repository, but the audience can see every file.</p>
+        </div>
+      </section>
+
+      <!-- 29 -->
+      <section class="slide" data-title="The build loop" data-section="Part 04 · Build" aria-hidden="true">
+        <div class="slide-head">
+          <p class="eyebrow">The loop</p>
+          <h2>A repeatable session.</h2>
+          <p class="lede">This is the habit that makes agents reliable. It works for code, writing, and research.</p>
+        </div>
+        <div class="process">
+          <div class="process-step">
+            <span class="process-num">01</span>
+            <p><strong>Plan.</strong> Read the folder. Propose a plan. Do not edit yet.</p>
+          </div>
+          <div class="process-step">
+            <span class="process-num">02</span>
+            <p><strong>Slice.</strong> Implement one behavior and its test.</p>
+          </div>
+          <div class="process-step">
+            <span class="process-num">03</span>
+            <p><strong>Verify.</strong> Run the tests. Read the diff.</p>
+          </div>
+          <div class="process-step">
+            <span class="process-num">04</span>
+            <p><strong>Review.</strong> Ask a subagent, or a fresh session, to critique.</p>
+          </div>
+          <div class="process-step">
+            <span class="process-num">05</span>
+            <p><strong>Save.</strong> Commit. Update <code>CLAUDE.md</code> if the rules changed.</p>
+          </div>
+        </div>
+        <div class="banner banner--accent"><strong>Small step → verify → save. Repeat.</strong> The loop matters more than the model you pick.</div>
+        <div class="notes" hidden>
+          <p><strong>Handbook:</strong> Part 4.1 and Part 6.5. Plan mode is the first step; <code>/rewind</code> is the safety net for a wrong turn.</p>
+          <p>If a session goes badly, do not keep pushing. Rewind or clear, restate the task, and start from the last good state.</p>
+        </div>
+      </section>
+
+      <!-- 30 -->
+      <section class="slide" data-title="Skills" data-section="Part 04 · Build" aria-hidden="true">
+        <div class="slide-head">
+          <p class="eyebrow">Skills</p>
+          <h2>A skill is a recipe the model can load.</h2>
+          <p class="lede">Use a skill when you repeat the same instructions more than twice.</p>
+        </div>
+        <div class="cols">
+          <div class="stack">
+            <span class="code-label">.claude/skills/make-cards/SKILL.md</span>
+            <pre class="code"><code>---
+name: make-cards
+description: Convert a lecture note into
+  cards in this project's format.
+---
+# Make cards
+1. Read $ARGUMENTS.
+2. Find 8–12 testable concepts.
+3. Append cards; no duplicates.
+4. Run python flashcards.py --check.</code></pre>
+            <p class="small">The <code>description</code> is the trigger. Write it like a search result, not a title.</p>
+          </div>
+          <figure class="diagram">
+            <div class="layers">
+              <div class="layer layer--1">
+                <span class="layer-label">Always loaded</span>
+                <p>Name and description</p>
+              </div>
+              <div class="layer layer--2">
+                <span class="layer-label">When invoked</span>
+                <p>The <code>SKILL.md</code> body</p>
+              </div>
+              <div class="layer layer--3">
+                <span class="layer-label">When needed</span>
+                <p>Templates, scripts, and references</p>
+              </div>
+            </div>
+            <figcaption>Progressive disclosure keeps the context light. Load detail only when the task needs it.</figcaption>
+          </figure>
+        </div>
+        <div class="notes" hidden>
+          <p><strong>Handbook:</strong> Part 4.3 and Part 6.6. Skills live in <code>.claude/skills/&lt;name&gt;/SKILL.md</code>. Keep the body under 500 lines.</p>
+          <p>Frontmatter can also set <code>allowed-tools</code>, <code>argument-hint</code>, and other fields. The description is the part the model uses to decide whether to load the skill.</p>
+        </div>
+      </section>
+
+      <!-- 31 -->
+      <section class="slide" data-title="Subagents" data-section="Part 04 · Build" aria-hidden="true">
+        <div class="slide-head">
+          <p class="eyebrow">Subagents</p>
+          <h2>A subagent is a fresh pair of eyes.</h2>
+          <p class="lede">It gets its own context and tools. Only the summary comes back to you.</p>
+        </div>
+        <figure class="diagram">
+          <div class="subagent-map">
+            <div class="agent-node">
+              <h3>Main agent</h3>
+              <p>Full conversation, your goals, and the task at hand.</p>
+            </div>
+            <div class="agent-link">
+              <span class="desktop">task →<br>← summary</span>
+              <span class="mobile">task ↓<br>↑ summary</span>
+            </div>
+            <div class="agent-node">
+              <h3>Subagent</h3>
+              <p>Fresh context, its own tools, and one narrow job.</p>
+            </div>
+          </div>
+          <figcaption>The main context stays clean. You get the conclusion, not the file dump.</figcaption>
+        </figure>
+        <div class="cols">
+          <div class="stack">
+            <h3>Use one when</h3>
+            <ul class="list">
+              <li>Research spans many files.</li>
+              <li>You want an independent review.</li>
+              <li>A task would flood your main context.</li>
+            </ul>
+          </div>
+          <div class="stack">
+            <h3>Example</h3>
+            <p class="small"><code>card-reviewer</code> checks every card against the notes, then returns a table of severity, card, problem, and suggested fix. It does not edit files.</p>
+          </div>
+        </div>
+        <div class="notes" hidden>
+          <p><strong>Handbook:</strong> Part 4.4 and Part 6.8. Subagents live in <code>.claude/agents/&lt;name&gt;.md</code>. The <code>description</code> drives automatic delegation.</p>
+          <p>You can also ask explicitly: “use the card-reviewer subagent.” Built-ins include Explore, Plan, and general-purpose. The main benefit is context isolation, not magic intelligence.</p>
+        </div>
+      </section>
+
+      <!-- 32 -->
+      <section class="slide" data-title="Superpowers" data-section="Part 04 · Build" aria-hidden="true">
+        <div class="slide-head">
+          <p class="eyebrow">Superpowers</p>
+          <h2>A discipline for bigger changes.</h2>
+          <p class="lede">It turns a vague feature request into a design doc, a plan, small tasks, tests, and a review.</p>
+        </div>
+        <div class="cols">
+          <div class="stack">
+            <span class="code-label">Install inside Claude Code</span>
+            <pre class="code"><code>/plugin install superpowers@claude-plugins-official</code></pre>
+            <p class="small">Skills trigger automatically. You can also name the skill in your request, for example “use the brainstorming skill.”</p>
+            <div class="banner banner--mark"><strong>Use it when</strong> the change is big enough to need a paper trail. Skip it for one-line fixes and quick questions.</div>
+          </div>
+          <div class="process">
+            <div class="process-step"><span class="process-num">01</span><p><strong>Brainstorm</strong> the idea.</p></div>
+            <div class="process-step"><span class="process-num">02</span><p><strong>Write a design doc.</strong></p></div>
+            <div class="process-step"><span class="process-num">03</span><p><strong>Create a git worktree.</strong></p></div>
+            <div class="process-step"><span class="process-num">04</span><p><strong>Write the plan.</strong></p></div>
+            <div class="process-step"><span class="process-num">05</span><p><strong>Execute in small tasks.</strong></p></div>
+            <div class="process-step"><span class="process-num">06</span><p><strong>Test each task.</strong></p></div>
+            <div class="process-step"><span class="process-num">07</span><p><strong>Review the result.</strong></p></div>
+            <div class="process-step"><span class="process-num">08</span><p><strong>Finish the branch.</strong></p></div>
+          </div>
+        </div>
+        <div class="notes" hidden>
+          <p><strong>Handbook:</strong> Part 5.1. Superpowers 7.x is skills-only. The old <code>/brainstorm</code>, <code>/write-plan</code>, and <code>/execute-plan</code> commands were removed in 5.1.</p>
+          <p>Artifacts live under <code>docs/superpowers/specs/</code> and <code>docs/superpowers/plans/</code>. The workflow is intentionally heavier than a chat; use it when the weight pays for itself.</p>
+        </div>
+      </section>
+
+      <!-- 33 -->
+      <section class="slide" data-title="OpenSpec" data-section="Part 04 · Build" aria-hidden="true">
+        <div class="slide-head">
+          <p class="eyebrow">OpenSpec</p>
+          <h2>Agree on the change before the code.</h2>
+          <p class="lede">OpenSpec turns a feature request into a reviewed proposal, a design, and a task list.</p>
+        </div>
+        <div class="cols">
+          <div class="process">
+            <div class="process-step"><span class="process-num">01</span><p><strong>Explore</strong> the current behavior.</p></div>
+            <div class="process-step"><span class="process-num">02</span><p><strong>Propose</strong> the change.</p></div>
+            <div class="process-step"><span class="process-num">03</span><p><strong>Review</strong> the delta.</p></div>
+            <div class="process-step"><span class="process-num">04</span><p><strong>Apply</strong> the tasks.</p></div>
+            <div class="process-step"><span class="process-num">05</span><p><strong>Sync</strong> the spec.</p></div>
+            <div class="process-step"><span class="process-num">06</span><p><strong>Archive</strong> the change.</p></div>
+          </div>
+          <div class="stack">
+            <pre class="code"><code>npm i -g @fission-ai/openspec@latest
+openspec init --tools claude
+/openspec-propose add-cloze-deletion
+openspec validate add-cloze-deletion --strict
+/openspec-apply-change add-cloze-deletion
+/openspec-archive-change add-cloze-deletion</code></pre>
+            <pre class="code"><code>openspec/changes/add-cloze-deletion/
+├── proposal.md
+├── design.md
+├── tasks.md
+└── specs/flashcards/spec.md</code></pre>
+            <p class="small">Workflows are skills: <code>/openspec-explore</code>, <code>/openspec-propose</code>, <code>/openspec-apply-change</code>, <code>/openspec-update-change</code>, <code>/openspec-sync-specs</code>, <code>/openspec-archive-change</code>.</p>
+          </div>
+        </div>
+        <div class="banner banner--mark"><strong>Best when behavior must be specified and reviewed.</strong> Skip it for non-behavioral changes; the config supports <code>skip_specs</code>.</div>
+        <div class="notes" hidden>
+          <p><strong>Handbook:</strong> Part 5.2. The npm install of OpenSpec 2.0 requires Node.js 22.12+; on Windows there is a standalone installer that does not need Node. Skills live in <code>.agents/skills/</code> and are linked into <code>.claude/skills/</code>; the old <code>/opsx:*</code> commands were removed in 2.0. Validate with <code>openspec validate &lt;change&gt; --strict</code>.</p>
+          <p>The review gate is the point: proposal → delta spec → design → tasks, then validate before apply. Archive merges the delta into <code>openspec/specs/&lt;domain&gt;/spec.md</code>.</p>
+          <p>In the handbook, the example adds cloze-deletion cards to the flashcards project: propose <code>add-cloze-deletion</code>, review the delta, apply, verify with the unittest suite and <code>quiz.html</code>, then archive.</p>
+        </div>
+      </section>
+
+      <!-- 34 -->
+      <section class="slide" data-title="RAG" data-section="Part 04 · Build" aria-hidden="true">
+        <div class="slide-head">
+          <p class="eyebrow">RAG</p>
+          <h2>Give the model the right pages.</h2>
+          <p class="lede">Retrieval-augmented generation is a pipeline. The model is only one stage.</p>
+        </div>
+        <div class="rag-flow" role="img" aria-label="RAG pipeline: question, retrieve, rerank, augment, generate, cite.">
+          <div class="rag-node"><b>Question</b><span>What the user asked</span></div>
+          <span class="rag-arrow" aria-hidden="true">→</span>
+          <div class="rag-node"><b>Retrieve</b><span>Search the sources</span></div>
+          <span class="rag-arrow" aria-hidden="true">→</span>
+          <div class="rag-node"><b>Rerank</b><span>Keep the best chunks</span></div>
+          <span class="rag-arrow" aria-hidden="true">→</span>
+          <div class="rag-node"><b>Augment</b><span>Put them in the prompt</span></div>
+          <span class="rag-arrow" aria-hidden="true">→</span>
+          <div class="rag-node"><b>Generate</b><span>Answer from them</span></div>
+          <span class="rag-arrow" aria-hidden="true">→</span>
+          <div class="rag-node"><b>Cite</b><span>Show where it came from</span></div>
+        </div>
+        <div class="cols">
+          <div class="stack">
+            <h3>Failure modes</h3>
+            <ul class="list list--bad">
+              <li>Bad chunking splits an idea in half.</li>
+              <li>Vocabulary mismatch hides the right passage.</li>
+              <li>The index is stale or incomplete.</li>
+              <li>The model cites a source it did not use.</li>
+            </ul>
+          </div>
+          <div class="stack">
+            <h3>The rule</h3>
+            <p class="lede" style="color: var(--ink);">If the right passage is not retrieved, the model cannot use it.</p>
+            <p class="small">Better retrieval beats a longer prompt. Search quality sets the ceiling.</p>
+          </div>
+        </div>
+        <div class="notes" hidden>
+          <p><strong>Handbook:</strong> Part 5.3. RAG is an architecture: collect, chunk, embed, index, retrieve, rerank, augment, generate.</p>
+          <p>The failure modes are worth more than the acronym. Most RAG demos fail at retrieval or chunking, not at generation.</p>
+        </div>
+      </section>
+
+      <!-- 35 -->
+      <section class="slide" data-title="RAG in practice" data-section="Part 04 · Build" aria-hidden="true">
+        <div class="slide-head">
+          <p class="eyebrow">RAG in practice</p>
+          <h2>You may not need a vector database.</h2>
+          <p class="lede">Claude Code already does a version of retrieval with files, search, and subagents.</p>
+        </div>
+        <div class="stack stack--tight">
+          <div class="banner"><strong><code>@notes/lecture-03.md</code></strong> puts one file on the desk.</div>
+          <div class="banner"><strong><code>/add-dir ../research</code></strong> adds another folder to the workspace.</div>
+          <div class="banner"><strong><code>CLAUDE.md</code></strong> keeps stable project knowledge close to every turn.</div>
+          <div class="banner"><strong>Grep and Glob</strong> find exact strings and files without loading everything.</div>
+          <div class="banner"><strong>An Explore subagent</strong> searches many files and returns only the conclusion.</div>
+        </div>
+        <div class="banner banner--accent"><strong>Build a real RAG when</strong> the corpus is large, shared, changing, or needs citations at scale. For one course folder, start with files and search.</div>
+        <div class="notes" hidden>
+          <p><strong>Handbook:</strong> Part 5.3 and Part 6.9. The practical progression is <code>@</code> references, then <code>/add-dir</code>, then search tools, then a real retrieval system.</p>
+          <p>This is the most important slide for students: do not build infrastructure you do not need. A clean folder and a good <code>CLAUDE.md</code> are often enough.</p>
+        </div>
+      </section>
+
+      <!-- 36 -->
+      <section class="slide" data-title="Daily playbook" data-section="Part 05 · Apply" aria-hidden="true">
+        <div class="slide-head">
+          <p class="eyebrow">Daily playbook</p>
+          <h2>Use it all week.</h2>
+          <p class="lede">One mode per session. Do not ask one prompt to do all six.</p>
+        </div>
+        <div class="playbook">
+          <div class="play">
+            <h3>Study</h3>
+            <p>Generate retrieval questions, then close the notes and test yourself.</p>
+            <p class="prompt">“Quiz me one card at a time. Wait for my answer.”</p>
+          </div>
+          <div class="play">
+            <h3>Read</h3>
+            <p>Summarize in layers: thesis, evidence, objections.</p>
+            <p class="prompt">“Give me the thesis in one sentence, then three pieces of evidence.”</p>
+          </div>
+          <div class="play">
+            <h3>Write</h3>
+            <p>Outline, draft, then critique against the rubric.</p>
+            <p class="prompt">“Review against this rubric. Quote the line and name the fix.”</p>
+          </div>
+          <div class="play">
+            <h3>Code</h3>
+            <p>Plan, small steps, tests, review.</p>
+            <p class="prompt">“Propose a plan and the files you will touch. Do not edit yet.”</p>
+          </div>
+          <div class="play">
+            <h3>Research</h3>
+            <p>Source-only summaries and citation checks.</p>
+            <p class="prompt">“Use only these sources. Mark anything they do not support.”</p>
+          </div>
+          <div class="play">
+            <h3>Admin</h3>
+            <p>Extract dates, draft emails, and make checklists.</p>
+            <p class="prompt">“Turn this email into a deadline list with owners.”</p>
+          </div>
+        </div>
+        <div class="notes" hidden>
+          <p><strong>Handbook:</strong> Part 7 covers study, reading, writing, coding, research, and admin in more detail.</p>
+          <p>Ask the audience which mode they will try this week. A single specific commitment is more useful than a general intention.</p>
+        </div>
+      </section>
+
+      <!-- 37 -->
+      <section class="slide" data-title="Academic integrity" data-section="Part 05 · Apply" aria-hidden="true">
+        <div class="slide-head">
+          <p class="eyebrow">Academic integrity</p>
+          <h2>Use AI without outsourcing your brain.</h2>
+          <p class="lede">The rules vary by school, course, and assignment. Your syllabus overrides this slide.</p>
+        </div>
+        <div class="policy">
+          <div class="policy-col policy-col--ok">
+            <h3>Usually fine</h3>
+            <ul>
+              <li>Brainstorming ideas</li>
+              <li>Explaining a concept</li>
+              <li>Debugging your code</li>
+              <li>Editing for clarity</li>
+              <li>Generating practice questions</li>
+            </ul>
+          </div>
+          <div class="policy-col policy-col--ask">
+            <h3>Ask first</h3>
+            <ul>
+              <li>Group work</li>
+              <li>Graded drafts</li>
+              <li>Lab reports</li>
+              <li>Code assignments</li>
+              <li>Anything covered by a policy</li>
+            </ul>
+          </div>
+          <div class="policy-col policy-col--no">
+            <h3>Never</h3>
+            <ul>
+              <li>Submit AI text as your own where prohibited</li>
+              <li>Fabricate a citation or source</li>
+              <li>Share confidential data</li>
+              <li>Let AI make a decision you must defend</li>
+            </ul>
+          </div>
+        </div>
+        <div class="banner banner--accent"><strong>If disclosure is required,</strong> try: “I used Claude to brainstorm and edit. All claims and errors are my own.”</div>
+        <div class="notes" hidden>
+          <p><strong>Handbook:</strong> Part 7.6. Policies differ. Some courses allow editing but not drafting; some allow both with disclosure.</p>
+          <p>Keep your drafts and notes. If you are asked how you used AI, you should be able to show your process.</p>
+        </div>
+      </section>
+
+      <!-- 38 -->
+      <section class="slide" data-title="The first month" data-section="Part 05 · Apply" aria-hidden="true">
+        <div class="slide-head">
+          <p class="eyebrow">The first month</p>
+          <h2>Twenty minutes a day.</h2>
+          <p class="lede">A small daily practice beats one long session you never repeat.</p>
+        </div>
+        <div class="roadmap">
+          <div class="roadmap-step">
+            <span class="roadmap-num">Week 1</span>
+            <h3>Get oriented</h3>
+            <p>Install. Use Claude Code for one small task. Write a short <code>CLAUDE.md</code>.</p>
+          </div>
+          <div class="roadmap-step">
+            <span class="roadmap-num">Week 2</span>
+            <h3>Build the project</h3>
+            <p>Build the flashcards app. Turn one repeated instruction into a skill.</p>
+          </div>
+          <div class="roadmap-step">
+            <span class="roadmap-num">Week 3</span>
+            <h3>Add leverage</h3>
+            <p>Add a subagent. Practice plan mode and <code>/rewind</code>.</p>
+          </div>
+          <div class="roadmap-step">
+            <span class="roadmap-num">Week 4</span>
+            <h3>Try a workflow</h3>
+            <p>Run one Superpowers or OpenSpec change. Try one source-only RAG session.</p>
+          </div>
+        </div>
+        <div class="banner banner--mark"><strong>Keep a log:</strong> what you asked, what worked, and what failed. Your own failure notes are more valuable than a list of tips.</div>
+        <div class="notes" hidden>
+          <p><strong>Handbook:</strong> Appendix F has a first-month plan with weekly exercises.</p>
+          <p>The goal is not to use every tool. The goal is to build one reliable loop and then add a tool when a real task demands it.</p>
+        </div>
+      </section>
+
+      <!-- 39 -->
+      <section class="slide" data-title="The takeaway" data-section="Part 05 · Apply" aria-hidden="true">
+        <div class="slide-head">
+          <p class="eyebrow">The takeaway</p>
+          <h2>A loop beats memorizing commands.</h2>
+          <p class="lede">Models will change. These three habits will survive the next version.</p>
+        </div>
+        <div class="facts">
+          <div class="fact">
+            <span class="outcome-num">01</span>
+            <h3>Brief well.</h3>
+            <p>Give the model context, rules, and a target output. Then ask for a plan.</p>
+          </div>
+          <div class="fact">
+            <span class="outcome-num">02</span>
+            <h3>Verify.</h3>
+            <p>Use sources, diffs, and tests. Confidence is not evidence.</p>
+          </div>
+          <div class="fact">
+            <span class="outcome-num">03</span>
+            <h3>Stay in charge.</h3>
+            <p>Approve risky actions. Keep your own judgment. The claim is yours.</p>
+          </div>
+        </div>
+        <div class="start-card">
+          <span class="code-label">Start here</span>
+          <p class="cmd">claude</p>
+          <p>Open your project folder, run <code>claude</code>, then ask: “Read this folder and tell me what it does. Do not edit anything.”</p>
+        </div>
+        <div class="notes" hidden>
+          <p>Close the loop. The audience should leave with one action: open a real folder and ask for an explanation without edits.</p>
+          <p><strong>Full handbook:</strong> <code>using-ai-from-zero-to-claude-code.md</code>. Use it for the detailed walkthrough, templates, and troubleshooting.</p>
+        </div>
+      </section>
+
+      <!-- 40 -->
+      <section class="slide" data-title="Your first 10 minutes" data-section="Part 05 · Apply" aria-hidden="true">
+        <div class="slide-head">
+          <p class="eyebrow">Your first 10 minutes</p>
+          <h2>Your turn.</h2>
+          <p class="lede">Do this now, while the room is together. The first session is the hardest one.</p>
+        </div>
+        <div class="process">
+          <div class="process-step">
+            <span class="process-num">01</span>
+            <p><strong>Install.</strong> Run <code>claude doctor</code>. It should pass before you continue.</p>
+          </div>
+          <div class="process-step">
+            <span class="process-num">02</span>
+            <p><strong>Make a folder</strong> with one file. Open the folder in your terminal.</p>
+          </div>
+          <div class="process-step">
+            <span class="process-num">03</span>
+            <p><strong>Ask:</strong> “Read this file and explain it in plain English. Ask me one question before you start.”</p>
+          </div>
+        </div>
+        <div class="start-card">
+          <span class="code-label">When that works</span>
+          <p class="cmd">/plan</p>
+          <p>Ask for a three-step improvement. Read the plan before you approve any edits.</p>
+        </div>
+        <div class="banner banner--accent"><strong>Questions?</strong> The full handbook is <code>using-ai-from-zero-to-claude-code.md</code>. Start with Appendix F for the first-month plan.</div>
+        <div class="notes" hidden>
+          <p>Leave time for this. Walk the room and help with installation errors. The first success matters more than covering every slide.</p>
+          <p>If someone is stuck, pair them with someone who is through step one. Do not debug 30 machines from the front of the room.</p>
+        </div>
+      </section>
+
+    </div>
+  </main>
+</div>
+
+<aside class="notes-panel" id="notesPanel" hidden aria-label="Speaker notes">
+  <div class="notes-head">
+    <span class="notes-label">Speaker notes</span>
+    <button class="close-btn" id="closeNotesBtn" type="button" aria-label="Close speaker notes">Close</button>
+  </div>
+  <div id="notesText"></div>
+</aside>
+
+<div class="overlay" id="overlay" role="dialog" aria-modal="true" aria-labelledby="overlayTitle" hidden>
+  <div class="overlay-inner">
+    <div class="overlay-head">
+      <h2 id="overlayTitle">Contents</h2>
+      <button class="close-btn" id="closeOverlayBtn" type="button">Close</button>
+    </div>
+    <div class="overlay-grid" id="overlayGrid"></div>
+  </div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  var slides = Array.prototype.slice.call(document.querySelectorAll(".slide"));
+  var total = slides.length;
+  var current = 0;
+
+  var app = document.getElementById("app");
+  var stage = document.getElementById("stage");
+  var counter = document.getElementById("counter");
+  var progress = document.getElementById("progressFill");
+  var sectionLabel = document.getElementById("sectionLabel");
+  var prevBtn = document.getElementById("prevBtn");
+  var nextBtn = document.getElementById("nextBtn");
+  var notesBtn = document.getElementById("notesBtn");
+  var closeNotesBtn = document.getElementById("closeNotesBtn");
+  var notesPanel = document.getElementById("notesPanel");
+  var notesText = document.getElementById("notesText");
+  var menuBtn = document.getElementById("menuBtn");
+  var overlay = document.getElementById("overlay");
+  var overlayGrid = document.getElementById("overlayGrid");
+  var closeOverlayBtn = document.getElementById("closeOverlayBtn");
+  var brandBtn = document.getElementById("brandBtn");
+  var lastFocus = null;
+
+  function pad(n) {
+    return String(n).padStart(2, "0");
+  }
+
+  function setHash() {
+    try {
+      history.replaceState(null, "", "#slide-" + (current + 1));
+    } catch (error) {
+      /* The artifact frame may restrict history; navigation still works. */
+    }
+  }
+
+  function render(index, options) {
+    options = options || {};
+    current = Math.max(0, Math.min(total - 1, index));
+
+    slides.forEach(function (slide, n) {
+      var active = n === current;
+      slide.classList.toggle("is-active", active);
+      slide.setAttribute("aria-hidden", active ? "false" : "true");
+    });
+
+    counter.textContent = pad(current + 1) + " / " + pad(total);
+    progress.style.width = (((current + 1) / total) * 100) + "%";
+    sectionLabel.textContent = slides[current].getAttribute("data-section") || "";
+
+    var notes = slides[current].querySelector(".notes");
+    notesText.innerHTML = notes ? notes.innerHTML : "<p>No notes for this slide.</p>";
+
+    prevBtn.disabled = current === 0;
+    nextBtn.disabled = current === total - 1;
+
+    Array.prototype.forEach.call(overlayGrid.children, function (button, n) {
+      button.classList.toggle("is-current", n === current);
+      if (n === current) {
+        button.setAttribute("aria-current", "true");
+      } else {
+        button.removeAttribute("aria-current");
+      }
+    });
+
+    if (!options.fromHash) {
+      setHash();
+    }
+    if (!options.silentScroll) {
+      window.scrollTo({ top: 0, behavior: "auto" });
+    }
+  }
+
+  function go(index) {
+    if (!overlay.hidden) {
+      return;
+    }
+    render(index);
+  }
+
+  function toggleNotes(force) {
+    var open = typeof force === "boolean" ? force : notesPanel.hidden;
+    notesPanel.hidden = !open;
+    notesBtn.setAttribute("aria-pressed", open ? "true" : "false");
+    if (open) {
+      notesPanel.scrollTop = 0;
+    }
+  }
+
+  function openOverlay() {
+    toggleNotes(false);
+    lastFocus = document.activeElement;
+    overlay.hidden = false;
+    document.body.classList.add("overlay-open");
+    app.inert = true;
+    closeOverlayBtn.focus();
+  }
+
+  function closeOverlay() {
+    overlay.hidden = true;
+    document.body.classList.remove("overlay-open");
+    app.inert = false;
+    if (lastFocus && typeof lastFocus.focus === "function") {
+      lastFocus.focus();
+    }
+  }
+
+  slides.forEach(function (slide, n) {
+    var button = document.createElement("button");
+    button.type = "button";
+    button.className = "overlay-item";
+    var number = document.createElement("span");
+    number.className = "n";
+    number.textContent = pad(n + 1);
+    var title = document.createElement("span");
+    title.className = "t";
+    title.textContent = slide.getAttribute("data-title") || "Slide " + (n + 1);
+    button.appendChild(number);
+    button.appendChild(title);
+    button.addEventListener("click", function () {
+      closeOverlay();
+      render(n);
+    });
+    overlayGrid.appendChild(button);
+  });
+
+  prevBtn.addEventListener("click", function () { go(current - 1); });
+  nextBtn.addEventListener("click", function () { go(current + 1); });
+  notesBtn.addEventListener("click", function () { toggleNotes(); });
+  closeNotesBtn.addEventListener("click", function () { toggleNotes(false); });
+  menuBtn.addEventListener("click", openOverlay);
+  closeOverlayBtn.addEventListener("click", closeOverlay);
+  brandBtn.addEventListener("click", function () { go(0); });
+
+  overlay.addEventListener("click", function (event) {
+    if (event.target === overlay) {
+      closeOverlay();
+    }
+  });
+
+  document.addEventListener("keydown", function (event) {
+    if (!overlay.hidden) {
+      if (event.key === "Escape") {
+        closeOverlay();
+      }
+      return;
+    }
+
+    var tag = document.activeElement && document.activeElement.tagName;
+    if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") {
+      return;
+    }
+    if ((tag === "BUTTON" || tag === "A") && (event.key === " " || event.key === "Enter")) {
+      return;
+    }
+
+    if (event.key === "ArrowRight" || event.key === "PageDown" || (event.key === " " && !event.shiftKey)) {
+      event.preventDefault();
+      go(current + 1);
+    } else if (event.key === "ArrowLeft" || event.key === "PageUp" || (event.key === " " && event.shiftKey)) {
+      event.preventDefault();
+      go(current - 1);
+    } else if (event.key === "Home") {
+      event.preventDefault();
+      go(0);
+    } else if (event.key === "End") {
+      event.preventDefault();
+      go(total - 1);
+    } else if (event.key === "n" || event.key === "N") {
+      event.preventDefault();
+      toggleNotes();
+    } else if (event.key === "o" || event.key === "O") {
+      event.preventDefault();
+      openOverlay();
+    } else if (event.key === "Escape") {
+      toggleNotes(false);
+    }
+  });
+
+  var touchX = null;
+  var touchY = null;
+
+  stage.addEventListener("touchstart", function (event) {
+    if (event.target.closest("pre, .table-wrap, .term-body, .code")) {
+      touchX = null;
+      touchY = null;
+      return;
+    }
+    if (event.touches.length === 1) {
+      touchX = event.touches[0].clientX;
+      touchY = event.touches[0].clientY;
+    }
+  }, { passive: true });
+
+  stage.addEventListener("touchend", function (event) {
+    if (touchX === null || touchY === null) {
+      return;
+    }
+    var dx = event.changedTouches[0].clientX - touchX;
+    var dy = event.changedTouches[0].clientY - touchY;
+    if (Math.abs(dx) > 55 && Math.abs(dx) > Math.abs(dy) * 1.4) {
+      go(current + (dx < 0 ? 1 : -1));
+    }
+    touchX = null;
+    touchY = null;
+  }, { passive: true });
+
+  window.addEventListener("hashchange", function () {
+    var match = window.location.hash.match(/^#slide-(\d+)$/);
+    if (!match) {
+      return;
+    }
+    var index = parseInt(match[1], 10) - 1;
+    if (index >= 0 && index < total && index !== current) {
+      render(index, { fromHash: true });
+    }
+  });
+
+  var initial = window.location.hash.match(/^#slide-(\d+)$/);
+  if (initial) {
+    var start = parseInt(initial[1], 10) - 1;
+    if (start >= 0 && start < total) {
+      render(start, { fromHash: true, silentScroll: true });
+    } else {
+      render(0, { fromHash: true, silentScroll: true });
+    }
+  } else {
+    render(0, { fromHash: true, silentScroll: true });
+  }
+})();
+</script>

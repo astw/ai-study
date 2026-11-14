@@ -1,0 +1,15 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+.pytest_cache/
+
+# Demo and test artifacts
+cards.db
+test-results/
+playwright/.auth/
+
+# OS files
+.DS_Store
+Thumbs.db
