@@ -20,10 +20,10 @@ Complete beginners — the handbook specifically addresses college students — 
 - What large language models are, what they are good at, and where they fail
 - How to write prompts that produce usable first drafts instead of generic text
 - How to install and use Claude Code: its interface, commands, and context management
-- How to give Claude a memory with `CLAUDE.md`, and how permissions keep you in control
+- How to give Claude a memory with `CLAUDE.md` and auto memory, and how permissions keep you in control
 - How to turn repeated work into slash commands, skills, and subagents
 - How to connect Claude Code to an external tool with a small local MCP server
-- How Superpowers, OpenSpec, and RAG fit into larger projects — including a complete OpenSpec 2.0 walkthrough that adds cloze-deletion cards to the flashcards project
+- How Superpowers, OpenSpec, and RAG fit into larger projects — including a complete OpenSpec 2.1 walkthrough that adds cloze-deletion cards to the flashcards project
 - How to apply all of this to studying, research, writing, coding, and daily admin
 
 ## How to use it
@@ -55,4 +55,4 @@ Keyboard controls:
 
 ## Version
 
-Handbook Version 1.0 · November 2026. Claude Code and third-party tool details — including OpenSpec 2.0 and Superpowers 7.x — reflect that period; if something has changed, check the current upstream documentation before relying on it.
+Handbook Version 1.0 · November 2026. Claude Code and third-party tool details — including OpenSpec 2.1 and Superpowers 7.x — reflect that period; if something has changed, check the current upstream documentation before relying on it.

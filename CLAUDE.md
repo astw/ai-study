@@ -56,7 +56,7 @@ grep -c '<section class="slide' ai-claude-code-slides.html
 - The running example is Maya, a first-year student turning PSY 101 lecture notes into flashcards in a `flashcards/` folder. That project — `flashcards.py`, `cards.md`, `quiz.html`, its `.claude/` commands, skills, and agents — is teaching material only and does not exist in this repository. Do not go looking for it. The Playwright guide reuses the same project and quiz contract; keep the described behavior (one card, Show answer, Next card) consistent across guides.
 - Appendix C contains copy-pasteable templates (CLAUDE.md, slash command, skill); Appendix A is the command cheat sheet. When a command, flag, or keybinding changes in the body, update the appendix too.
 - Claude Code command, flag, and keybinding references are dated "Version 1.0 · November 2026" and must stay accurate. Verify against current Claude Code behavior rather than inventing syntax.
-- Third-party tool details are equally version-sensitive: the handbook documents OpenSpec 2.0 (skills such as `/openspec-propose`, not the removed `/opsx:*` commands) and Superpowers 7.x. Check upstream documentation before changing those sections.
+- Third-party tool details are equally version-sensitive: the handbook documents OpenSpec 2.1 (skills such as `/openspec-propose`, not the removed `/opsx:*` commands) and Superpowers 7.x. Check upstream documentation before changing those sections.
 - The MCP demo in Part 4.5 is explained in the handbook but implemented in `mcp-demo/`. Keep the tool names, commands, and behavior in sync between the handbook, `mcp-demo/server.py`, and `mcp-demo/README.md`.
 - The demo uses the MCP Python SDK 2.x (`mcp.server.mcpserver.MCPServer`, not `FastMCP` from 1.x) and `claude mcp add`. Keep the server code and commands tested against the current SDK and Claude Code; the demo uses only sample data and no credentials.
 
@@ -103,7 +103,7 @@ python -m py_compile mcp-demo/server.py mcp-demo/smoke_test.py
 
 Run the heredoc with the Bash tool. Internal anchors are hand-written; after changing a heading, check the Contents links. The deck's sync and slide-count checks are in the slide-deck section.
 
-After installing `mcp-demo/requirements.txt`, `cd mcp-demo && python smoke_test.py` exercises both MCP tools without Claude Code. It was last verified with MCP Python SDK 2.3.0.
+After installing `mcp-demo/requirements.txt`, `cd mcp-demo && python smoke_test.py` exercises both MCP tools using a temporary database and leaves `cards.db` untouched. It was last verified with MCP Python SDK 2.3.0.
 
 This folder is a git repository; commit content changes normally. Playwright and its browsers are not installed, so do not claim Playwright tests passed; the Playwright examples are syntax-checked only. The MCP demo was verified with its smoke test, but its dependencies live in `mcp-demo/.venv` or an ad-hoc `uv` environment, not the system Python.
 

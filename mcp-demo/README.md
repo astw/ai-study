@@ -42,7 +42,7 @@ python -m pip install -r requirements.txt
 python smoke_test.py
 ```
 
-You should see the tool names, a search hit for “confirmation bias,” the newly added “schema” card, and `Smoke test passed.`
+You should see the tool names, a search hit for “confirmation bias,” the newly added “schema” card, and `Smoke test passed.` The smoke test uses a temporary database, so it does not modify `cards.db` or duplicate sample cards.
 
 ### 3. Connect it to Claude Code
 
@@ -76,7 +76,7 @@ Claude should call `add_card`, then `search_cards`, and show the new row. Search
 
 ### 5. Reset or remove
 
-- Delete `cards.db` to reset the sample data.
+- Delete `cards.db` to reset the sample data. If the server is connected, it recreates an empty table on the next tool call; restart the Claude Code session to reseed the sample cards.
 - Remove the server from Claude Code:
 
 ```bash

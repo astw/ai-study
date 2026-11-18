@@ -410,7 +410,7 @@ def test_page_level_assertions(page: Page) -> None:
     show_answer = page.get_by_role("button", name="Show answer")
     expect(show_answer).to_be_visible()
     show_answer.click()
-    expect(page.get_by_test_id("answer")).to_contain_text("confirmation")
+    expect(page.get_by_test_id("answer")).to_contain_text("notice and trust evidence")
 ```
 
 A bare `assert locator.is_visible()` is an immediate check with no retry, and reading `inner_text()` before asserting can observe a half-rendered page. Use `expect` for anything that changes. If a known-slow operation genuinely needs longer, set `expect.set_options(timeout=10_000)` or pass a per-assertion `timeout=15_000`.
@@ -599,7 +599,7 @@ A route handler must do exactly one of:
 - **`route.continue_()`** — send to the network. The trailing underscore avoids the Python keyword. Options can change URL, method, headers, or post data.
 - **`route.fulfill(...)`** — return a synthetic response. Useful for mocks, errors, delays, and missing data.
 - **`route.abort(error_code="...")`** — fail the request. Codes include `failed`, `connectionrefused`, `namenotresolved`, `timedout`, and `internetdisconnected`.
-- **`route.fallback()`** hands to the next matching handler; **`route.fetch()`** performs the real request for modification.
+- **`route.fallback()`** hands to the next matching handler; **`route.fetch()`** performs the real request and returns the response without fulfilling it — modify it, then call `route.fulfill(response=...)`.
 
 > **These network examples target an API-backed quiz page.** The Part 2 fixture embeds its cards and has no `loading` or `error-state` element, so the static page never calls `/api/cards`. To run the examples, add a small `fetch('/api/cards')` path and those states to the fixture, or route the request your real page makes. The route handlers and assertions are the lesson.
 
@@ -757,12 +757,16 @@ Inside a test with the `page` and `context` fixtures, record manually when neede
 
 ```python
 context.tracing.start(screenshots=True, snapshots=True, sources=True)
-page.goto("http://127.0.0.1:8000/quiz.html")
-page.get_by_role("button", name="Show answer").click()
-context.tracing.stop(path="trace.zip")
+try:
+    page.goto("http://127.0.0.1:8000/quiz.html")
+    page.get_by_role("button", name="Show answer").click()
+finally:
+    context.tracing.stop(path="trace.zip")
 ```
 
 Open it with `playwright show-trace trace.zip`. Inspect the failed action, the DOM before and after, console, and network. pytest tracing writes trace files under `test-results/`. `pytest --tracing retain-on-failure` keeps only failures.
+
+Do not combine this manual snippet with `--tracing=...`: pytest-playwright already starts tracing on the context, and a second `start()` raises “Tracing has been already started.” If you use the flag, read the trace it writes under `test-results/` instead.
 
 ## 6.3 Reports and triage
 
@@ -1095,7 +1099,7 @@ These labs use the local quiz and your own machine. Do not point interception, a
 
 ## Lab 1 — Read a failure (15 min)
 
-**Goal:** See what a useful failure contains. Change the expected first question to something that does not exist, run `python -m pytest tests/test_quiz.py -k loads -v`, and read the locator, received text, and timeout. Restore it.
+**Goal:** See what a useful failure contains. Change the expected first question to something that does not exist, run `python -m pytest tests/test_quiz.py::test_reveal_answer_then_go_to_next_card -v`, and read the locator, received text, and timeout. Restore it.
 
 **Observe:** Playwright reports the locator, action, elapsed time, and page state. **QA takeaway:** Read evidence before editing. A timeout on the wrong locator is a test bug; a missing card is a product bug.
 
@@ -1183,7 +1187,7 @@ expect(locator).to_be_hidden()
 expect(locator).to_be_enabled()
 expect(locator).to_be_disabled()
 expect(locator).to_have_text("Card 1 of 3")
-expect(locator).to_contain_text("confirmation")
+expect(locator).to_contain_text("notice and trust")
 expect(locator).to_have_count(2)
 expect(page).to_have_url(re.compile(r"/quiz\.html$"))
 ```
@@ -1199,7 +1203,7 @@ Assertion timeout: 5 s; action/navigation timeout: 30 s.
 | `route.continue_()` | Send to network |
 | `route.fulfill(status=..., json=...)` | Return fake response |
 | `route.abort(error_code="namenotresolved")` | Fail request |
-| `route.fallback()` / `route.fetch()` | Next handler / real request |
+| `route.fallback()` / `route.fetch()` | Next handler / fetch a response to modify, then fulfill |
 | `page.unroute(pattern)` | Remove route |
 
 ### Markers and common errors

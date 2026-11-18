@@ -499,7 +499,7 @@ A failed `ping` does **not** prove the application is broken. Many networks bloc
 Root (.)
   └── Top-level domain (com, org, net, uk, io)
         └── Authoritative name server for example.com
-              └── Records: www.example.com → 93.184.216.34
+              └── Records: www.example.com → 203.0.113.10
 ```
 
 A **recursive resolver** (your ISP, corporate DNS, or a public resolver) does the walking and caches answers. Your device asks the resolver; the resolver asks root, TLD, and authoritative servers as needed.
@@ -519,7 +519,7 @@ Every DNS record has a **TTL** (time to live) in seconds. Resolvers cache the an
 
 | Record | Meaning | Example |
 |---|---|---|
-| `A` | Name → IPv4 address | `www.example.com → 93.184.216.34` |
+| `A` | Name → IPv4 address | `www.example.com → 203.0.113.10` |
 | `AAAA` | Name → IPv6 address | `www.example.com → 2606:2800:...` |
 | `CNAME` | Alias to another name | `shop.example.com → store.example.net` |
 | `MX` | Mail server for a domain | `example.com → mail.example.com` |
@@ -905,9 +905,9 @@ openssl s_client -connect example.com:443 -servername example.com
 ```
 * Host example.com:443 was resolved.
 * IPv6: 2606:2800:...
-* IPv4: 93.184.216.34
-*   Trying 93.184.216.34:443...
-* Connected to example.com (93.184.216.34) port 443
+* IPv4: 203.0.113.10
+*   Trying 203.0.113.10:443...
+* Connected to example.com (203.0.113.10) port 443
 * TLS 1.3 connection using TLS_AES_128_GCM_SHA256
 * Server certificate:
 *  subject: CN=example.com
@@ -1051,11 +1051,17 @@ netstat -ano | findstr :443
 ```
 
 ```bash
-# macOS/Linux
+# Linux
 ip addr
 ip route
-netstat -rn
 ss -tulpn
+```
+
+```bash
+# macOS
+ifconfig
+netstat -rn
+lsof -iTCP -sTCP:LISTEN
 ```
 
 **Observe:** IPv4 and IPv6 addresses, default gateway, DNS servers, subnet mask/prefix, listening ports.
@@ -1073,10 +1079,18 @@ dig example.com AAAA +short
 curl -v https://example.com
 ```
 
-Force a connection to a specific IP without changing DNS:
+Force a connection to a specific IP without changing DNS. Resolve the current address first, then reuse it:
 
 ```bash
-curl -v --resolve example.com:443:93.184.216.34 https://example.com
+# macOS/Linux
+ip=$(dig +short example.com | head -1)
+curl -v --resolve example.com:443:"$ip" https://example.com
+```
+
+```powershell
+# Windows PowerShell
+$ip = (Resolve-DnsName example.com -Type A | Select-Object -First 1).IPAddress
+curl.exe -v --resolve "example.com:443:$ip" https://example.com
 ```
 
 **Observe:** Which resolver answered, whether A and AAAA records exist, whether the site works when DNS is bypassed.

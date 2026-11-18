@@ -151,15 +151,16 @@ Three more facts that explain a lot of behavior:
 
 ## 1.3 Models: which brain am I talking to?
 
-By late 2026, Claude comes in three capability tiers. Each is a trade-off between intelligence, speed, and cost:
+By late 2026, Claude comes in four families. Each is a trade-off between intelligence, speed, and cost:
 
-| Tier | Personality | Best for |
+| Family | Example | Best for |
 |---|---|---|
-| **Opus** (e.g., Opus 5.5) | The most capable, slowest, most expensive | Hard reasoning, complex coding, long multi-step work |
-| **Sonnet** (e.g., Sonnet 5.5) | Balanced; strong at everyday coding and analysis | Most daily work; often the default in Claude Code |
-| **Haiku** (e.g., Haiku 5.5) | Fastest and cheapest | Simple tasks, quick edits, bulk processing |
+| **Fable** | Fable 5.2 | Most capable and most expensive; the hardest reasoning and long agentic work |
+| **Opus** | Opus 5.5 | Strong default on paid plans; complex coding and multi-step work |
+| **Sonnet** | Sonnet 5.5 | Balanced speed and capability; everyday work while conserving usage |
+| **Haiku** | Haiku 5.5 | Fastest and cheapest; simple, repetitive tasks |
 
-An analogy: Opus is the senior specialist, Sonnet is the excellent all-rounder, Haiku is the fast assistant. For a student writing an essay plan or debugging a Python script, Sonnet is almost always enough. Use Opus when a task is genuinely hard or when a mistake would be costly; use Haiku when the task is simple and repetitive.
+An analogy: Fable is the specialist you call for the hardest problem, Opus is the strong default, Sonnet is the excellent all-rounder, and Haiku is the fast assistant. Opus 5.5 is the default on paid plans. For most student work, Sonnet 5.5 is enough and conserves usage; Haiku 5.5 handles simple repetitive tasks; reserve Fable 5.2 for the hardest work. Availability varies by plan.
 
 In Claude Code you can see and switch models with `/model`. Do not obsess over this at the start. Start with the default, and switch only when you have a reason.
 
@@ -247,7 +248,7 @@ Practical consequences:
 
 - **It cannot truly "know" your intent.** Ambiguity gets resolved by guessing. Say what you want.
 - **It may be overconfident or sycophantic.** It tends to agree with you. Ask "what is wrong with this?" not just "is this good?"
-- **It has no persistent memory by default.** Claude Code persists *project* knowledge in files (`CLAUDE.md`), not in hidden memory. What is on disk is what survives.
+- **It has no memory of its own.** The model does not learn from your conversation, but Claude Code uses on-disk memory: explicit `CLAUDE.md` instructions and, in local sessions, auto memory notes. What is on disk is what survives; review it.
 - **It can be manipulated by text.** Instructions hidden in a web page or a document can hijack an agent. See 2.5.
 
 ## 1.7 Privacy, permissions, and academic integrity
@@ -693,7 +694,7 @@ Type `/` to see everything available. Commands only run when they start the mess
 | `/help` | Show help and the command list | You forgot a command |
 | `/init` | Analyze the project and create a starter `CLAUDE.md` | First session in a project |
 | `/status` | Show version, model, account, settings sources | Something feels wrong |
-| `/model` | Switch model (Sonnet, Opus, Haiku, or a full name) | A task is unusually hard, or you need speed |
+| `/model` | Switch model (Fable, Opus, Sonnet, Haiku, or a full name) | A task is unusually hard, or you need speed |
 | `/context` | Show what is filling the context window | Answers get worse or the session is long |
 | `/compact [focus]` | Summarize the conversation to free space | Mid-task, when context is crowded |
 | `/clear` | Start a fresh conversation with empty context | Switching to an unrelated task |
@@ -706,7 +707,7 @@ Type `/` to see everything available. Commands only run when they start the mess
 |---|---|
 | `/resume` | Resume a previous session (picker or by ID/name) |
 | `/rewind` | Restore code and/or conversation to a checkpoint; aliases `/checkpoint`, `/undo` |
-| `/memory` | Edit `CLAUDE.md` files and manage memory |
+| `/memory` | Edit `CLAUDE.md` files and review auto memory |
 | `/diff` | Review what changed in the working tree |
 | `/usage` | Session cost, plan limits, activity stats (`/cost` and `/stats` are aliases) |
 | `/doctor` | Diagnose installation, settings, and `CLAUDE.md` issues |
@@ -752,7 +753,7 @@ Claude Code also compacts automatically as it approaches the limit, but do not r
 
 ## 3.8 CLAUDE.md: giving Claude a memory
 
-Claude Code has no hidden memory of your preferences. What it has is files. The most important is **`CLAUDE.md`**, a plain Markdown file of instructions loaded at the start of every session.
+Claude Code's memory is files on disk. Two kinds matter: **`CLAUDE.md`** (explicit instructions you write and share) and **auto memory** (machine-local notes Claude Code may write for itself). The most important for a project is **`CLAUDE.md`**, a plain Markdown file of instructions loaded at the start of every session.
 
 **Where it lives (loaded broadest to most specific):**
 
@@ -803,6 +804,8 @@ Tests pass, `cards.csv` has one row per card, and `quiz.html` works in a browser
 - **Prefer `.claude/rules/` for path-specific rules.** A rule file with `paths: ["src/api/**/*.ts"]` loads only when Claude touches those files, instead of bloating the main file.
 
 Edit it with `/memory`, or open it in your editor. If Claude suggests adding something to project memory, say yes and review the edit.
+
+**Auto memory.** In local sessions, Claude Code can write machine-local notes (a `MEMORY.md` index plus memory files) under `~/.claude/projects/<project>/memory/` and load the index at the start of every session. Auto memory is on by default; it is not shared with your team and does not replace `CLAUDE.md`. Review or edit it with `/memory`; if a note is wrong, correct or delete it. Toggle auto memory off in `/memory` if you do not want it.
 
 > **Note:** `CLAUDE.md` is loaded every session and re-injected after compaction. That is why brevity matters. Treat it like onboarding notes for a new teammate, not a diary.
 
@@ -1338,7 +1341,7 @@ python -m pip install -r requirements.txt
 python smoke_test.py
 ```
 
-The smoke test creates `mcp-demo/cards.db`, lists the tools, searches the seeded cards, adds a "schema" card, and finds it again.
+The smoke test uses a temporary database, lists the tools, searches the seeded cards, adds a "schema" card, and finds it again. It does not modify `mcp-demo/cards.db`.
 
 **Connect it to Claude Code.** Use the absolute path to the virtual-environment interpreter and to `server.py`:
 
@@ -1364,7 +1367,7 @@ Source: Lecture 04
 Then search for "schema" and show me the stored card.
 ```
 
-Claude should call `add_card`, then `search_cards`, and show the new row. Search for `bias` to see the cards seeded on first run. The database is `mcp-demo/cards.db`; delete it to reset the demo.
+Claude should call `add_card`, then `search_cards`, and show the new row. Search for `bias` to see the cards seeded on first run. The database is `mcp-demo/cards.db`; delete it to reset the demo, then restart the session to reseed the sample cards.
 
 **What this demonstrates.** The server exposes **tools**, not just files: Claude decides when to call `search_cards` or `add_card`. It runs locally over stdio: Claude Code starts the process and sends JSON-RPC over stdin/stdout. The server has only two operations on one file, which is the least-privilege shape you want. The same pattern scales to a real database, Notion, or an issue tracker; remote servers add authentication and network failure modes.
 
@@ -1531,7 +1534,7 @@ You just experienced a professional workflow without memorizing a project-manage
 
 ## 5.2 OpenSpec: write the spec before the code
 
-**What it is:** OpenSpec is a free, MIT-licensed tool for **spec-driven development** with AI coding assistants, made by Fission-AI. Current npm version: `@fission-ai/openspec` 2.0.0 (November 2026).
+**What it is:** OpenSpec is a free, MIT-licensed tool for **spec-driven development** with AI coding assistants, made by Fission-AI. Current npm version: `@fission-ai/openspec` 2.1.0 (November 2026).
 
 The problem it solves: requirements live in chat history, evaporate between sessions, and differ depending on which AI tool you use. OpenSpec puts the requirements in Markdown files that you can review, version, and hand to any assistant. The AI implements against the spec, not against its memory of a conversation.
 
@@ -1557,13 +1560,13 @@ git status
 node --version
 ```
 
-You want `node --version` to report 22.12.0 or newer, and `git status` to report a clean tree. OpenSpec writes files into your project; start from a committed state so you can review and undo what it does.
+You want `node --version` to report 22.20.0 or newer, and `git status` to report a clean tree. OpenSpec writes files into your project; start from a committed state so you can review and undo what it does.
 
 You also need a feature worth specifying. The example below adds **cloze-deletion cards** ("fill in the blank"). The same steps work for tags, Anki export, or spaced repetition; only the requirements change.
 
 ### Install and initialize
 
-**Prerequisite:** Node.js 22.12.0 or newer for the npm install. Check with `node --version`.
+**Prerequisite:** Node.js 22.20.0 or newer for the npm install. Check with `node --version`.
 
 ```bash
 npm install -g @fission-ai/openspec@latest
@@ -1593,7 +1596,7 @@ openspec init --tools claude
 
 `--tools claude` selects the Claude Code integration without prompts. Use `--tools none` if you only want the spec structure. Running plain `openspec init` opens a picker; choose Claude Code.
 
-**What `openspec init` creates (version 2.0):**
+**What `openspec init` creates (version 2.1):**
 
 ```text
 flashcards/
@@ -1629,7 +1632,7 @@ openspec list
 
 Then start or restart Claude Code in the project root and type `/openspec-` in the prompt. The six skills should appear. The init report also states how many skills were written and linked.
 
-**Migrating a 1.x project:** `openspec update` removes the old `/opsx` command files and per-tool skill copies, keeps any files you edited, and reports what it removed. OpenSpec 2.0 no longer uses `openspec/project.md` or `AGENTS.md`; move durable project facts into `openspec/config.yaml` (see below), then delete the old file. Run `openspec update --dry-run` first if you want to preview the changes.
+**Migrating a 1.x project:** `openspec update` removes the old `/opsx` command files and per-tool skill copies, keeps any files you edited, and reports what it removed. OpenSpec 2.x no longer uses `openspec/project.md` or `AGENTS.md`; move durable project facts into `openspec/config.yaml` (see below), then delete the old file. Run `openspec update --dry-run` first if you want to preview the changes.
 
 **Commit before you work:** `openspec/` holds the specs, and `.agents/` plus `.claude/skills/` hold the workflows. Commit all three so the process travels with the project. Do not edit files under `.agents/skills/openspec-*`; `openspec update` overwrites them.
 
@@ -2465,7 +2468,7 @@ Acceptance criteria for the feature:
 
 Use this if requirements need review, the feature touches existing behavior, or you work with other people or agents.
 
-Install once (Node 22.12+):
+Install once (Node 22.20+):
 
 ```bash
 npm install -g @fission-ai/openspec@latest
@@ -2822,7 +2825,7 @@ A simple routine that keeps AI useful and bounded:
 | A subagent is slow or expensive | Too broad a task or too many tools | Narrow the job; use a cheaper model; remove unnecessary tools |
 | Plugin install fails | Wrong marketplace or plugin name | Add the marketplace first; use the exact `plugin@marketplace` string; check `/plugin`; run `/reload-plugins` |
 | Superpowers feels heavy | Its startup hook consumes context | Disable it when not using it; use it for substantial features, not one-line edits |
-| OpenSpec workflows are missing | Init was not run, skills are stale, or Claude Code was not restarted | Node 22.12+; run `openspec init --tools claude` in the project root; `openspec update`; restart Claude Code; check `.claude/skills/openspec-*`; invoke the `/openspec-*` skill names |
+| OpenSpec workflows are missing | Init was not run, skills are stale, or Claude Code was not restarted | Node 22.20+; run `openspec init --tools claude` in the project root; `openspec update`; restart Claude Code; check `.claude/skills/openspec-*`; invoke the `/openspec-*` skill names |
 | OpenSpec validation fails | Wrong heading levels or missing scenarios | `### Requirement:`, `#### Scenario:`, and every scenario needs a WHEN/GIVEN trigger and a THEN outcome; use `skip_specs: true` for purely non-behavioral changes |
 | RAG answers are wrong | Retrieval returned the wrong passages | Check which sources were retrieved; fix chunking and metadata; re-index; require citations and verify them |
 
@@ -2858,7 +2861,7 @@ A simple routine that keeps AI useful and bounded:
 No to start: Claude Code can write the first version while you direct and review. But you should learn enough to verify what it produced. Start with small projects, read the code, and ask for explanations. "I can explain every line" is the real bar.
 
 **Which model should I use?**
-Start with the default (usually Sonnet). Use Opus for hard reasoning or complex multi-step work, and Haiku for simple, repetitive tasks. Switch with `/model`. Model names and availability vary by plan and provider.
+Start with the default (Opus 5.5 on paid plans). Use Sonnet 5.5 for everyday work when you want to conserve usage, Haiku 5.5 for simple repetitive tasks, and Fable 5.2 only for the hardest reasoning. Switch with `/model`. Model names and availability vary by plan and provider.
 
 **Does Claude Code work on Windows?**
 Yes. Native Windows is supported; Git for Windows is optional but recommended, and sandboxing requires macOS, Linux, or WSL.
@@ -2882,7 +2885,7 @@ Claude Code requires a paid Claude plan or API access; plans and prices change. 
 Claude Code is built around Claude. Other agentic coding tools exist, but this guide is deliberately Claude-specific.
 
 **How do I update?**
-Native installs auto-update. npm installs update with `npm update -g @anthropic-ai/claude-code`. Package-manager installs (Homebrew, winget) typically do not auto-update. Run `claude --version` and `claude doctor` afterward.
+Native installs auto-update. npm installs update with `npm install -g @anthropic-ai/claude-code@latest` (avoid `npm update -g`, which may stay on the old release). Package-manager installs (Homebrew, winget) typically do not auto-update. Run `claude --version` and `claude doctor` afterward.
 
 **How do I uninstall?**
 Use the same package manager you installed with (`npm uninstall -g @anthropic-ai/claude-code`, `brew uninstall --cask claude-code`, or `winget uninstall Anthropic.ClaudeCode`). Your configuration and sessions live under your user profile; remove them only if you intend to lose them.
@@ -2927,7 +2930,7 @@ claude --add-dir ../shared-notes        # add another directory
 | `/diff` | Review working-tree changes |
 | `/rewind` | Restore a checkpoint (also `Esc Esc` on empty input) |
 | `/resume` | Resume a previous session |
-| `/memory` | Edit `CLAUDE.md` files |
+| `/memory` | Edit `CLAUDE.md` files and review auto memory |
 | `/usage` | Cost, plan limits, activity (`/cost`, `/stats`) |
 | `/export` | Export the conversation |
 | `/doctor` | Diagnose installation and settings |

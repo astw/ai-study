@@ -2234,7 +2234,7 @@ Tests pass; quiz.html opens in a browser.</code></pre>
               <tr><td>Plan</td><td>Read-only. Proposes a plan.</td><td>Before a large or risky change.</td></tr>
               <tr><td>Auto</td><td>A classifier decides what is safe.</td><td>Fast work when you will still review.</td></tr>
               <tr><td>Don't ask</td><td>Runs pre-approved tools only; blocks the rest.</td><td>Scripted or constrained workflows.</td></tr>
-              <tr><td>Bypass</td><td>Never asks. Full access.</td><td>Isolated containers and throwaway VMs only.</td></tr>
+              <tr><td>Bypass</td><td>Never asks, but explicit deny rules still apply.</td><td>Isolated containers and throwaway VMs only.</td></tr>
             </tbody>
           </table>
         </div>
@@ -2487,7 +2487,7 @@ openspec validate add-cloze-deletion --strict
         </div>
         <div class="banner banner--mark"><strong>Best when behavior must be specified and reviewed.</strong> Skip it for non-behavioral changes; the config supports <code>skip_specs</code>.</div>
         <div class="notes" hidden>
-          <p><strong>Handbook:</strong> Part 5.2. The npm install of OpenSpec 2.0 requires Node.js 22.12+; on Windows there is a standalone installer that does not need Node. Skills live in <code>.agents/skills/</code> and are linked into <code>.claude/skills/</code>; the old <code>/opsx:*</code> commands were removed in 2.0. Validate with <code>openspec validate &lt;change&gt; --strict</code>.</p>
+          <p><strong>Handbook:</strong> Part 5.2. The npm install of OpenSpec 2.1 requires Node.js 22.20+; on Windows there is a standalone installer that does not need Node. Skills live in <code>.agents/skills/</code> and are linked into <code>.claude/skills/</code>; the old <code>/opsx:*</code> commands were removed in 2.0. Validate with <code>openspec validate &lt;change&gt; --strict</code>.</p>
           <p>The review gate is the point: proposal → delta spec → design → tasks, then validate before apply. Archive merges the delta into <code>openspec/specs/&lt;domain&gt;/spec.md</code>.</p>
           <p>In the handbook, the example adds cloze-deletion cards to the flashcards project: propose <code>add-cloze-deletion</code>, review the delta, apply, verify with the unittest suite and <code>quiz.html</code>, then archive.</p>
         </div>
@@ -2919,6 +2919,10 @@ openspec validate add-cloze-deletion --strict
       if (event.key === "Escape") {
         closeOverlay();
       }
+      return;
+    }
+
+    if (event.ctrlKey || event.metaKey || event.altKey) {
       return;
     }
 
