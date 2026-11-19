@@ -2812,3 +2812,827 @@ of a transaction.
 - Cleanup must be verified. Run `SELECT COUNT(*)` after cleanup and expect
   zero rows; a cleanup that deleted nothing looks the same as a successful one
   otherwise.
+
+## Part 8 — Schema, Constraints, Indexes, and Views
+
+Parts 2 to 7 worked with rows. This part works with the definitions that hold
+the rows. **DDL** (data definition language) creates and alters tables, views,
+and indexes, and drops them again. A release changes DDL when it adds a
+column, tightens a rule, or introduces an object that reports depend on. DDL
+is the part of a release that outlives any single row: a wrong `UPDATE` can be
+corrected row by row, but a missing constraint silently accepts bad rows in
+every later release.
+
+This part reuses the Part 1 schema and its sample rows. The view and the
+indexes are additions on top of that schema, and the table definitions are the
+ones Part 1 printed. No example was executed.
+
+### CREATE TABLE
+
+`CREATE TABLE` names a table and defines its columns. Each column has a name,
+a data type, and, when needed, a constraint. The finished definition is a
+contract that every later `INSERT` and `UPDATE` must satisfy (Part 7).
+
+`reviews` is the best single example because it carries every constraint kind
+this schema uses. **SQL Server:**
+
+```sql
+CREATE TABLE reviews (
+    review_id   INT PRIMARY KEY,
+    card_id     INT NOT NULL,
+    user_id     INT NOT NULL,
+    rating      INT,
+    reviewed_at DATETIME2 NOT NULL,
+    CONSTRAINT fk_reviews_card FOREIGN KEY (card_id) REFERENCES cards (card_id),
+    CONSTRAINT fk_reviews_user FOREIGN KEY (user_id) REFERENCES users (user_id),
+    CONSTRAINT ck_reviews_rating CHECK (rating BETWEEN 1 AND 5)
+);
+```
+
+**Standard SQL:**
+
+```sql
+CREATE TABLE reviews (
+    review_id   INTEGER PRIMARY KEY,
+    card_id     INTEGER NOT NULL,
+    user_id     INTEGER NOT NULL,
+    rating      INTEGER,
+    reviewed_at TIMESTAMP NOT NULL,
+    CONSTRAINT fk_reviews_card FOREIGN KEY (card_id) REFERENCES cards (card_id),
+    CONSTRAINT fk_reviews_user FOREIGN KEY (user_id) REFERENCES users (user_id),
+    CONSTRAINT ck_reviews_rating CHECK (rating BETWEEN 1 AND 5)
+);
+```
+
+The column definitions are separated by commas; the table-level constraints
+follow the columns. `review_id INT PRIMARY KEY` is a column constraint, and
+`CONSTRAINT fk_reviews_card ...` is a named table constraint. Names are worth
+the extra words: SQL Server reports the constraint name when it rejects a row
+(Part 7), and a later migration needs the name to drop or change the rule. An
+unnamed constraint gets a server-generated name that is hard to quote in a bug
+report and hard to reference in a script.
+
+A table can reference only a table that already exists, so the creation order
+is `users`, then `decks`, then `cards`, then `reviews`. A migration script
+that creates or alters these tables must follow the same order, and the
+cleanup order is the reverse (Part 7). The types in the two blocks are the
+Part 1 mapping: `INT`/`INTEGER`, `NVARCHAR`/`VARCHAR`, `DATETIME2`/`TIMESTAMP`.
+
+Most DDL in SQL Server can run inside a transaction and roll back with it
+(Part 7), which is how a test schema change is tried and undone in one
+session. Some other products commit DDL implicitly, so check the behavior of
+the target database before assuming that a `ROLLBACK` will remove a table.
+
+### Constraints
+
+A constraint is a rule the database checks so that an application cannot save
+a row that breaks it. Treat each one as a test oracle: a negative test supplies
+a value that breaks the rule and expects the named error (Part 7). This part
+covers the six constraint kinds; the shared schema uses four of them, and the
+other two appear in the syntax variants below.
+
+**Primary key.** The primary key identifies one row. It combines two rules:
+values must be unique, and they may not be `NULL` (Part 1).
+`review_id INT PRIMARY KEY` declares it as a column constraint; a composite
+key is written as a table constraint, `CONSTRAINT pk_name PRIMARY KEY
+(col_a, col_b)`. A duplicate `review_id` or a `NULL` `review_id` is rejected.
+In SQL Server a primary key also creates a unique index, clustered by default,
+so the key is the table's default physical order; the Indexes section returns
+to that.
+
+**Foreign key.** `fk_reviews_card` and `fk_reviews_user` require the child row
+to name an existing parent. Inserting review 10008 with `card_id` 9999 is
+rejected because card 9999 does not exist. The same constraint protects the
+parent side: deleting card 1001 while its two reviews remain is rejected until
+the child rows go (Part 7). A foreign key is a correctness rule, not an
+index; SQL Server does not create an index on the child column, so the check
+can scan `reviews` unless one exists.
+
+**UNIQUE.** A unique constraint rejects duplicate values in a column or in a
+combination of columns. This schema has none; `users.email` is the natural
+candidate. `legacy_users` (Part 1) holds two rows with `alice@example.com`,
+and a `UNIQUE` constraint on `email` is what turns that duplicate from a query
+finding (Part 11) into a rejected insert. The variant below is a syntax
+illustration, not the shared definition:
+
+**SQL Server:**
+
+```sql
+CREATE TABLE users (
+    user_id      INT PRIMARY KEY,
+    email        NVARCHAR(255) NOT NULL UNIQUE,
+    display_name NVARCHAR(100),
+    created_at   DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME()
+);
+```
+
+**Standard SQL:**
+
+```sql
+CREATE TABLE users (
+    user_id      INTEGER PRIMARY KEY,
+    email        VARCHAR(255) NOT NULL UNIQUE,
+    display_name VARCHAR(100),
+    created_at   TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+```
+
+The `UNIQUE` word on the column is shorthand for a table-level unique
+constraint on that column. A combination rule is
+`CONSTRAINT uq_name UNIQUE (col_a, col_b)`.
+
+**UNIQUE and NULL.** This is a portability trap. The standard's uniqueness
+rule compares non-`NULL` values, and because `NULL` is not equal to anything,
+the standard permits more than one `NULL` in a unique column. SQL Server
+treats `NULL`s as equal for a `UNIQUE` constraint, so a single-column unique
+constraint accepts at most one `NULL`. Products differ in the details, so the
+durable rule is the one this schema follows: declare unique columns
+`NOT NULL`. `users.email` is `NOT NULL` in the shared schema and in both
+variants above.
+
+**NOT NULL.** `NOT NULL` requires a value. In this schema only
+`users.display_name` and `reviews.rating` omit it. An `INSERT` that omits
+`display_name` stores `NULL` and succeeds; an `INSERT` that omits `email` or
+writes `NULL` to it is rejected. A column declared without `NOT NULL` is
+nullable by default. When a migration adds `NOT NULL` to an existing column,
+every existing row is validated, so a table that already holds a `NULL`
+rejects the change.
+
+**CHECK.** `ck_reviews_rating` is `CHECK (rating BETWEEN 1 AND 5)`. An insert
+or update that sets `rating` to 0 or 6 is rejected. A `NULL` rating passes,
+and this is the point QA checks most often miss: a check constraint rejects a
+row only when its condition is FALSE. For a `NULL` rating, `NULL BETWEEN 1 AND
+5` is UNKNOWN (Part 3), and the database accepts UNKNOWN as well as TRUE. The
+constraint therefore means "a rating, when present, is 1 to 5", not "every
+review has a rating". Reviews 10003 and 10007 exist with `NULL` ratings. If
+the product requires a rating, that is a separate `NOT NULL` rule or an
+application rule, and the gap between the two is a finding.
+
+**DEFAULT.** The `users` variant above also shows `DEFAULT`. A default
+supplies a value when the `INSERT` omits the column. It does not apply when
+the statement writes an explicit `NULL`: a nullable column keeps the `NULL`,
+and a `NOT NULL` column rejects the statement. SQL Server's
+`SYSUTCDATETIME()` returns the server's UTC clock as a `DATETIME2`; standard
+SQL has `CURRENT_TIMESTAMP`. A default moves the value's source from the
+client to the server, so a check that compares `created_at` with the test
+run's start time is comparing the server clock, which may differ in time zone
+or offset. A default is also invisible at the `INSERT`, so a test that
+exercises it must omit the column deliberately.
+
+The six kinds, with the places this schema uses them:
+
+| Constraint | Rule | In this schema |
+|---|---|---|
+| `PRIMARY KEY` | Unique and not null; identifies one row | Every table |
+| `FOREIGN KEY` | The child value names an existing parent | Four foreign keys |
+| `UNIQUE` | No duplicate values | None; `email` is the candidate |
+| `NOT NULL` | A value is required | All but `display_name`, `rating` |
+| `CHECK` | The condition is not FALSE | `ck_reviews_rating` |
+| `DEFAULT` | Fills the column when the insert omits it | None |
+
+**Adding constraints to existing data.** `ALTER TABLE ... ADD CONSTRAINT`
+changes a table that already holds rows, and the database validates those
+rows by default. Adding `UNIQUE (email)` to a table that has already received
+`legacy_users` fails on the duplicate Alice address; adding `NOT NULL` to a
+column that holds `NULL`s fails on the first such row. That is why constraint
+additions usually come after cleanup, and why the DDL step of a migration is
+part of the test: the failure is evidence about the data, not only about the
+script.
+
+### Views
+
+A view is a named query stored in the database. It has a name and a column
+list, and each time it is referenced the database evaluates its definition
+against the current base tables. A view is not a copy of the rows.
+
+SQL Server can create or replace a view in one statement. **SQL Server:**
+
+```sql
+CREATE OR ALTER VIEW v_deck_card_counts AS
+SELECT d.deck_id,
+       d.title,
+       COUNT(c.card_id) AS card_count
+FROM decks AS d
+LEFT JOIN cards AS c ON c.deck_id = d.deck_id
+GROUP BY d.deck_id, d.title;
+```
+
+`CREATE OR ALTER VIEW` is available from SQL Server 2016 SP1 onward; earlier
+versions create with `CREATE VIEW` and change with `ALTER VIEW`. The standard
+form has no "or alter": **Standard SQL:**
+
+```sql
+CREATE VIEW v_deck_card_counts AS
+SELECT d.deck_id,
+       d.title,
+       COUNT(c.card_id) AS card_count
+FROM decks AS d
+LEFT JOIN cards AS c ON c.deck_id = d.deck_id
+GROUP BY d.deck_id, d.title;
+```
+
+A `CREATE OR REPLACE VIEW` form exists in some products but is not standard
+SQL. In SQL Server, `CREATE VIEW` and `CREATE OR ALTER VIEW` must be the only
+statement in their batch, so a script creates the view first and queries it in
+a later batch.
+
+The view returns one row per deck with the deck's ID, its title, and its
+number of cards. It starts from `decks` and uses `LEFT JOIN`, so a deck with
+no cards survives. The count is `COUNT(c.card_id)`, not `COUNT(*)`: the left
+join produces one row for deck 104 with every `cards` column `NULL`, and
+`COUNT(*)` would count that row as 1, while `COUNT(column)` ignores the `NULL`
+(Part 4).
+
+**SQL Server and standard SQL:**
+
+```sql
+SELECT deck_id, title, card_count
+FROM v_deck_card_counts
+ORDER BY deck_id;
+```
+
+**Expected rows.**
+
+| deck_id | title | card_count |
+|---:|---|---:|
+| 101 | Biology 101 | 2 |
+| 102 | Spanish Verbs | 1 |
+| 103 | Biology 101 | 2 |
+| 104 | Empty Deck | 0 |
+
+Two rows show Biology 101 because decks 101 and 103 share the title; `deck_id`
+is selected so the two remain distinguishable, the same point Part 6 made
+about the CTE that counted cards per deck.
+
+The base-table query returns the same four rows:
+
+**SQL Server and standard SQL:**
+
+```sql
+SELECT d.deck_id,
+       d.title,
+       COUNT(c.card_id) AS card_count
+FROM decks AS d
+LEFT JOIN cards AS c ON c.deck_id = d.deck_id
+GROUP BY d.deck_id, d.title
+ORDER BY d.deck_id;
+```
+
+The view's body and this query differ only by the `ORDER BY`; the result is
+identical row for row. In SQL Server, querying the view is logically the same
+as pasting its definition into the query, and the optimizer is free to combine
+the two. That leads to three facts every QA engineer should hold:
+
+- **A view stores no rows.** It stores a definition and a column list. When
+  deck 104 gains a card, the next query of the view reports 1 without any
+  change to the view. A view with a `GROUP BY`, like this one, is read-only;
+  a simple view without aggregation can be updatable, and then an `INSERT`,
+  `UPDATE`, or `DELETE` through the view changes the base table.
+- **A view is not automatically faster.** It runs its query every time. A
+  view with a join and an aggregate does the same work as the base query. Do
+  not treat a view as a cache. Products do offer materialized views, which
+  store a result and must be refreshed, and SQL Server has a restricted form
+  called an indexed view; neither is the plain view defined here, and
+  creating one is a schema change that needs the same review as an index.
+- **Nested views hide logic.** A view may select from another view. Each
+  layer can filter, join, or collapse rows, and the outer definition does not
+  show what the inner one did. When a release check disagrees with the screen,
+  read every view in the chain before blaming the base table; a filter added
+  to a lower view changes every report above it.
+
+One more SQL Server behavior: `SELECT *` inside a view is expanded when the
+view is created, and the view stores that column list. A column added to the
+base table later does not appear in the view until the view is changed or its
+metadata is refreshed. Name the columns explicitly in a view that another
+system reads, for the same reason Part 2 gives for release checks.
+
+### Indexes
+
+An index is a structure the database keeps beside a table so that it can find
+rows without reading every page. The table is the source of truth; an index
+is a derived structure that the optimizer may choose to use.
+
+**Clustered and nonclustered.** In SQL Server, a **clustered index** defines
+the physical order of the table's rows: its leaf level is the data. A table
+can have only one clustered index, because the rows can be stored in only one
+order. A **nonclustered index** is a separate structure with sorted key
+columns and a pointer to the row: the clustered key on a clustered table, or
+a row identifier on a heap. A table can have many nonclustered indexes. In
+this schema each primary key is a clustered index by default, so `cards` is
+physically ordered by `card_id`.
+
+The first index a QA engineer usually proposes is on a foreign-key column,
+because SQL Server does not create one with the foreign key (Part 1). Both
+the join `cards.deck_id = decks.deck_id` and a parent delete that checks child
+rows can use it.
+
+**SQL Server:**
+
+```sql
+CREATE NONCLUSTERED INDEX ix_cards_deck_id
+    ON cards (deck_id);
+```
+
+**Standard SQL:**
+
+```sql
+CREATE INDEX ix_cards_deck_id
+    ON cards (deck_id);
+```
+
+In SQL Server, `CREATE INDEX` without a type word creates a nonclustered
+index; the word is spelled out above to make the choice visible. Standard SQL
+has no `CLUSTERED` or `NONCLUSTERED` keyword, so the product's default index
+type applies.
+
+With the index, a query can seek the rows for one deck instead of scanning
+every card:
+
+**SQL Server and standard SQL:**
+
+```sql
+SELECT card_id, front
+FROM cards
+WHERE deck_id = 101;
+```
+
+The result is cards 1001 and 1002. On a table this small the optimizer may
+still choose a table scan, because reading five rows is cheaper than reading
+the index and then the rows. The index earns its cost as the table grows, so
+the evidence that it is used is the execution plan (Part 10), not a judgment
+from five sample rows.
+
+**Key order.** An index with more than one key column sorts by the first key,
+then by the second within equal first values, and so on. That order is why
+the leftmost column matters. This index:
+
+**SQL Server:**
+
+```sql
+CREATE NONCLUSTERED INDEX ix_cards_deck_created
+    ON cards (deck_id, created_at)
+    INCLUDE (front, back);
+```
+
+sorts by `deck_id` first and by `created_at` within a deck. A query that
+filters on `deck_id = 101` can seek to the deck's entries, and because the
+entries are already ordered by `created_at`, `ORDER BY created_at` inside that
+deck can read them in order. A query that filters only on
+`created_at >= '2026-01-17'` has no equality on the leftmost key, so the index
+cannot seek to the matching rows; the engine can scan the whole index, which
+may or may not be cheaper than scanning the table.
+
+**Included columns and covering indexes.** `INCLUDE (front, back)` stores
+those columns in the index's leaf level without making them part of the sort
+key. They cannot be used to seek or to order rows; they exist so a query can
+read their values from the index. An index that contains every column a query
+references is a **covering index** for that query: the engine answers it from
+the index alone and never visits the table. For example:
+
+**SQL Server and standard SQL:**
+
+```sql
+SELECT card_id, front, back
+FROM cards
+WHERE deck_id = 101
+ORDER BY created_at;
+```
+
+`ix_cards_deck_created` covers this query: `deck_id` and `created_at` are key
+columns, `front` and `back` are included, and `card_id` comes with every
+nonclustered index on this table because it is the clustered key. `INCLUDE`
+is SQL Server syntax; standard `CREATE INDEX` has no included-column clause,
+and products that support covering indexes spell it differently. Covering is
+a property of one query, not of the index: the same index may not cover the
+next query.
+
+**Write cost.** Every index is maintained by every `INSERT`, `UPDATE`, and
+`DELETE` on the table. A new row adds an entry to each index, a change to an
+indexed column moves an entry, and a delete removes one. More indexes mean
+more work per write, more storage, and more log. A wide covering index that
+includes `front` and `back` duplicates the text of every card, so it can grow
+close to the size of the table. The optimizer also gets more choices, and a
+plan change can make a query slower even when the new index looked helpful in
+isolation.
+
+**Shared environments.** Creating an index is a schema change, not a
+query-level tune-up. It consumes storage, can take time proportional to the
+table, can block or slow other sessions while it builds, and changes the
+optimizer's choices for every query on the table. On a shared test server,
+other testers share those effects. Capture the slow query, its plan, and its
+reads (Part 10), propose the index with that evidence, and get approval before
+creating it. The same rule applies to dropping an index: another team's query
+may depend on it.
+
+### Release QA Use
+
+- Treat the DDL as the test oracle. Every primary key, foreign key, unique
+  rule, check, and not-null rule is a negative test with a named expected
+  error (Part 7); a test that passes with no error has not exercised the rule.
+- Test the boundary values, not only the happy path. For
+  `ck_reviews_rating`, try 0, 1, 5, 6, and `NULL`: 0 and 6 must be rejected, 1
+  and 5 must be accepted, and `NULL` must be accepted only if an unrated
+  review is legal. That last case separates "invalid rating" from "missing
+  rating".
+- Before a migration adds a constraint, run the query that would find the rows
+  it will reject: duplicate emails behind a proposed `UNIQUE`, `NULL`s behind
+  a proposed `NOT NULL`, orphan keys behind a proposed foreign key. The
+  constraint failure is then a predicted result with evidence attached.
+- Read the view definition, not only its output, when a number is wrong.
+  Expand every nested view to the base tables and check the filters, joins,
+  and `GROUP BY` at each layer.
+- Treat a view as a read interface, not an optimization. A check that queries
+  the base table and a check that queries the view should return the same
+  rows; if they do not, one of them is reading a different definition.
+- Propose an index with the query, the plan, and the reads that justify it,
+  and name the write cost. Do not create or drop an index on a shared or
+  production environment without approval.
+- Check dependencies before dropping or renaming a column or table. A view or
+  index that references it can break, and SQL Server can create a view
+  against a missing object and fail only when the view is queried.
+
+### Watch-outs
+
+- A `CHECK` constraint rejects FALSE only. `NULL` produces UNKNOWN, which
+  passes, so `ck_reviews_rating` still allows an unrated review.
+- `UNIQUE` and `NULL` do not mean the same thing in every product. SQL Server
+  treats `NULL`s as equal, so a single-column unique constraint accepts at
+  most one `NULL`; keep unique columns `NOT NULL`.
+- A `DEFAULT` applies only when the insert omits the column. An explicit
+  `NULL` stays `NULL`, and the value comes from the server clock, not the
+  client.
+- A foreign key needs the parent row first. Creation order and cleanup order
+  both follow the dependency; a foreign key is not an index.
+- A constraint added to a table with existing data validates that data.
+  Adding `UNIQUE` over duplicates or `NOT NULL` over `NULL`s fails until the
+  rows are fixed.
+- A view stores no rows and is not automatically faster. Nested views hide
+  filters and joins, and `SELECT *` in a SQL Server view freezes the column
+  list at creation.
+- A table has one clustered index and can have many nonclustered indexes. The
+  leftmost key column decides which seeks work; `INCLUDE` is SQL Server
+  syntax; covering is relative to one query.
+- Every index adds work to every write and consumes storage. Do not add or
+  drop indexes in a shared environment without approval.
+
+## Part 9 — Window Functions
+
+Parts 4 and 6 answered per-group questions by collapsing rows with `GROUP BY`
+or by running a correlated subquery once per row. A **window function** answers
+those questions without collapsing rows: it computes a value over a set of
+related rows, the **window**, and attaches the result to each row. A review can
+show its own rating and its card's average beside it, and the result still has
+one row per review.
+
+The shape is `function(...) OVER (PARTITION BY ... ORDER BY ...)`. The
+`PARTITION BY` clause divides the rows into independent windows, the `ORDER BY`
+clause orders the rows inside each window, and an optional frame narrows the
+window further. SQL Server and standard SQL share this shape for every
+function in this part, so each example is labeled **SQL Server and standard
+SQL:** and is valid unchanged in both. Every stated result is derived from the
+Part 1 sample rows; no example was executed.
+
+### ROW_NUMBER
+
+`ROW_NUMBER()` numbers the rows inside each window, starting at 1, in the
+order the `OVER` clause specifies. The function never gives two rows the same
+number, but when the ordering produces a tie, it does not promise which tied
+row gets the smaller number. The rows are numbered; they are not sorted by the
+result.
+
+The standard use is "the latest row per group". This query finds the most
+recent review of each card:
+
+**SQL Server and standard SQL:**
+
+```sql
+WITH ranked_reviews AS (
+    SELECT review_id,
+           card_id,
+           user_id,
+           rating,
+           reviewed_at,
+           ROW_NUMBER() OVER (
+               PARTITION BY card_id
+               ORDER BY reviewed_at DESC
+           ) AS rn
+    FROM reviews
+)
+SELECT review_id, card_id, rating, reviewed_at
+FROM ranked_reviews
+WHERE rn = 1
+ORDER BY card_id;
+```
+
+**Expected rows.**
+
+| review_id | card_id | rating | reviewed_at |
+|---:|---:|---:|---|
+| 10002 | 1001 | 4 | 2026-01-21 10:00:00 |
+| 10006 | 1002 | 2 | 2026-01-25 14:00:00 |
+| 10004 | 1003 | 3 | 2026-01-23 12:00:00 |
+| 10007 | 1004 | NULL | 2026-02-01 15:00:00 |
+
+The window is partitioned by `card_id`, so the numbering restarts for each
+card, and `ORDER BY reviewed_at DESC` puts the newest review first, so
+`rn = 1` is the latest. Card 1005 has no reviews, so it has no partition and
+no row. The filter `rn = 1` sits in the outer query because a window function
+is evaluated after `WHERE`; the alias `rn` does not exist when the CTE's
+`WHERE` would run, and the server rejects the reference. The result matches
+the correlated subquery in Part 6, which returned reviews 10002, 10006,
+10004, and 10007.
+
+The tie rule is explicit in this form. If two reviews of a card share the
+latest `reviewed_at`, `ROW_NUMBER` still returns one row and picks between
+them arbitrarily. Add a unique tiebreaker such as `review_id DESC` inside the
+`OVER` ordering to make the choice repeatable. If every tied row must survive,
+use `RANK` below and keep rank 1.
+
+Without `PARTITION BY`, the window is the whole result set and the numbering
+runs from 1 to the row count.
+
+### RANK and DENSE_RANK
+
+`RANK()` and `DENSE_RANK()` also number rows by the `OVER` ordering, but they
+give tied rows the same number. They differ in what happens after a tie:
+`RANK` skips the numbers the tied rows would have used, so the sequence has
+gaps; `DENSE_RANK` does not skip, so the sequence has none. The card count per
+deck provides a tie: decks 101 and 103 each hold two cards.
+
+**SQL Server and standard SQL:**
+
+```sql
+SELECT deck_id,
+       COUNT(*) AS card_count,
+       RANK() OVER (ORDER BY COUNT(*) DESC) AS rank_value,
+       DENSE_RANK() OVER (ORDER BY COUNT(*) DESC) AS dense_rank_value
+FROM cards
+GROUP BY deck_id
+ORDER BY card_count DESC, deck_id;
+```
+
+**Expected rows.**
+
+| deck_id | card_count | rank_value | dense_rank_value |
+|---:|---:|---:|---:|
+| 101 | 2 | 1 | 1 |
+| 103 | 2 | 1 | 1 |
+| 102 | 1 | 3 | 2 |
+
+The two tied decks share rank 1. `RANK` gives the next deck 3, because two
+rows have already occupied positions 1 and 2; `DENSE_RANK` gives it 2 because
+it counts distinct positions, not rows. Deck 104 is absent because `GROUP BY`
+groups only the rows in `cards` and deck 104 has no cards (Part 4). The window
+functions run over the grouped rows, which is why the `ORDER BY` inside
+`OVER` can use the aggregate `COUNT(*)`; the window sees the result of
+`GROUP BY`, not the raw table.
+
+`ROW_NUMBER` would number the same three rows 1, 2, and 3, with the tied
+decks ordered arbitrarily unless the `OVER` ordering names a tiebreaker. Pick
+the function from the question: `ROW_NUMBER` to choose exactly one row,
+`RANK` for competition ranking with gaps, and `DENSE_RANK` for positions with
+no gaps.
+
+### PARTITION BY
+
+`PARTITION BY` divides the rows into independent windows before the function
+runs. Each partition starts its numbering or total from scratch; without the
+clause, every row is in one window. The partition columns and the `ORDER BY`
+columns serve different purposes: the partition defines the groups, and the
+order defines the sequence inside each group.
+
+This query numbers the reviews twice, once across the whole table and once
+within each card:
+
+**SQL Server and standard SQL:**
+
+```sql
+SELECT review_id,
+       card_id,
+       reviewed_at,
+       ROW_NUMBER() OVER (ORDER BY reviewed_at) AS overall_position,
+       ROW_NUMBER() OVER (
+           PARTITION BY card_id
+           ORDER BY reviewed_at
+       ) AS position_in_card
+FROM reviews
+ORDER BY reviewed_at;
+```
+
+**Expected rows.**
+
+| review_id | card_id | reviewed_at | overall_position | position_in_card |
+|---:|---:|---|---:|---:|
+| 10001 | 1001 | 2026-01-20 09:00:00 | 1 | 1 |
+| 10002 | 1001 | 2026-01-21 10:00:00 | 2 | 2 |
+| 10003 | 1002 | 2026-01-22 11:00:00 | 3 | 1 |
+| 10004 | 1003 | 2026-01-23 12:00:00 | 4 | 1 |
+| 10005 | 1004 | 2026-01-24 13:00:00 | 5 | 1 |
+| 10006 | 1002 | 2026-01-25 14:00:00 | 6 | 2 |
+| 10007 | 1004 | 2026-02-01 15:00:00 | 7 | 2 |
+
+The first window has no `PARTITION BY`, so it is one set of seven rows and the
+review timestamps are strictly increasing, giving positions 1 to 7. The
+second restarts at each card: review 10003 is the first review of card 1002
+even though it is the third review overall, and review 10005 is the first of
+card 1004 even though it is the fifth overall. Both position columns stay
+beside every detail row; no row is collapsed.
+
+Two ways to get this wrong: leave out `PARTITION BY` and compare positions
+across groups that should be separate, or partition by a column that is unique
+per row, such as `review_id`, which makes every window a single row and every
+number 1.
+
+### SUM OVER
+
+A window aggregate computes the aggregate over the window and repeats it on
+every row. `SUM(rating) OVER (PARTITION BY card_id)` is the card's total
+rating attached to each review of that card. Unlike `GROUP BY`, it does not
+reduce the result to one row per card.
+
+**SQL Server and standard SQL:**
+
+```sql
+SELECT review_id,
+       card_id,
+       rating,
+       SUM(rating) OVER (PARTITION BY card_id) AS card_rating_sum
+FROM reviews
+ORDER BY card_id, review_id;
+```
+
+**Expected rows.**
+
+| review_id | card_id | rating | card_rating_sum |
+|---:|---:|---:|---:|
+| 10001 | 1001 | 5 | 9 |
+| 10002 | 1001 | 4 | 9 |
+| 10003 | 1002 | NULL | 2 |
+| 10006 | 1002 | 2 | 2 |
+| 10004 | 1003 | 3 | 3 |
+| 10005 | 1004 | 5 | 5 |
+| 10007 | 1004 | NULL | 5 |
+
+The totals match the grouped query in Part 4: card 1001 sums to 9, card 1002
+to 2, card 1003 to 3, and card 1004 to 5. `SUM` ignores `NULL`, so the two
+unrated reviews contribute nothing: review 10003 shows the card total of 2
+even though its own rating is `NULL`, and review 10007 shows 5. The total
+repeats on every review row; the select list changed, not the row count. A
+`GROUP BY` would return four rows and lose the individual reviews.
+
+Adding an `ORDER BY` inside `OVER` makes the sum cumulative, and the frame
+says which rows the aggregate sees:
+
+**SQL Server and standard SQL:**
+
+```sql
+SELECT review_id,
+       card_id,
+       reviewed_at,
+       rating,
+       SUM(rating) OVER (
+           PARTITION BY card_id
+           ORDER BY reviewed_at
+           ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+       ) AS running_rating_sum
+FROM reviews
+ORDER BY card_id, reviewed_at;
+```
+
+**Expected rows.**
+
+| review_id | card_id | reviewed_at | rating | running_rating_sum |
+|---:|---:|---|---:|---:|
+| 10001 | 1001 | 2026-01-20 09:00:00 | 5 | 5 |
+| 10002 | 1001 | 2026-01-21 10:00:00 | 4 | 9 |
+| 10003 | 1002 | 2026-01-22 11:00:00 | NULL | NULL |
+| 10006 | 1002 | 2026-01-25 14:00:00 | 2 | 2 |
+| 10004 | 1003 | 2026-01-23 12:00:00 | 3 | 3 |
+| 10005 | 1004 | 2026-01-24 13:00:00 | 5 | 5 |
+| 10007 | 1004 | 2026-02-01 15:00:00 | NULL | 5 |
+
+The frame `ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW` means "from the
+first row of the partition through this row". Card 1001 reaches 9 at its
+second review. Card 1002's first review has no rating, so its running sum is
+`NULL` until review 10006 adds 2; the running sum of a set that contains only
+`NULL` is `NULL`, not 0 (Part 4). The frame is standard SQL and the shape is
+the same in SQL Server.
+
+Without an explicit frame, an `ORDER BY` inside `OVER` still produces a
+running aggregate, but the default frame is a `RANGE` frame that includes all
+rows with the same `ORDER BY` value. With distinct timestamps here the two
+frames agree; with tied timestamps they can produce different totals. State
+the frame when the requirement depends on row-by-row accumulation, and name
+the column that breaks ties.
+
+### LAG and LEAD
+
+`LAG(column, offset, default)` returns a value from an earlier row in the same
+partition, and `LEAD` returns one from a later row. The offset defaults to 1.
+The third argument is returned only when the requested row does not exist in
+the partition. Both functions need an `ORDER BY` inside `OVER`; without a
+defined order there is no previous or next row.
+
+This query compares each review with the reviews before and after it on the
+same card:
+
+**SQL Server and standard SQL:**
+
+```sql
+SELECT review_id,
+       card_id,
+       reviewed_at,
+       rating,
+       LAG(rating, 1, 0) OVER (
+           PARTITION BY card_id
+           ORDER BY reviewed_at
+       ) AS previous_rating,
+       LEAD(rating, 1, 0) OVER (
+           PARTITION BY card_id
+           ORDER BY reviewed_at
+       ) AS next_rating
+FROM reviews
+ORDER BY card_id, reviewed_at;
+```
+
+**Expected rows.**
+
+| review_id | card_id | reviewed_at | rating | previous_rating | next_rating |
+|---:|---:|---|---:|---:|---:|
+| 10001 | 1001 | 2026-01-20 09:00:00 | 5 | 0 | 4 |
+| 10002 | 1001 | 2026-01-21 10:00:00 | 4 | 5 | 0 |
+| 10003 | 1002 | 2026-01-22 11:00:00 | NULL | 0 | 2 |
+| 10006 | 1002 | 2026-01-25 14:00:00 | 2 | NULL | 0 |
+| 10004 | 1003 | 2026-01-23 12:00:00 | 3 | 0 | 0 |
+| 10005 | 1004 | 2026-01-24 13:00:00 | 5 | 0 | NULL |
+| 10007 | 1004 | 2026-02-01 15:00:00 | NULL | 5 | 0 |
+
+Read the edge values carefully. The first review of each card has no earlier
+row, so `previous_rating` is the supplied default 0; the last review of each
+card has no later row, so `next_rating` is 0. Review 10006 is the exception
+that proves the rule: its `previous_rating` is `NULL`, not 0, because review
+10003 exists and its rating is `NULL`. The third argument fills a missing
+row, not a missing value. Review 10005 shows a `NULL` next rating for the same
+reason: review 10007 exists. The 0 sentinel is safe here only because
+`ck_reviews_rating` forbids a real rating of 0 (Part 8); if 0 were valid, the
+column could not tell "no row" from "a row whose value is 0".
+
+Set the offset to look further back, such as `LAG(rating, 2, 0)` for the
+review before the previous one. If the default is omitted, a missing row
+returns `NULL`, the same value a real `NULL` rating produces. That ambiguity
+is often fine in a report and never fine in a check that must tell the two
+cases apart.
+
+Typical uses are comparing consecutive ratings to find a drop, checking that
+timestamps increase, finding the first time a state changed, and measuring a
+gap between events. Because the functions read another row, the order must be
+deterministic: add a unique tiebreaker to the `OVER` ordering when timestamps
+can repeat.
+
+### Release QA Use
+
+- Use `ROW_NUMBER` with a filter for the latest or first record per key.
+  Partition by the key, order by the timestamp with a unique tiebreaker, and
+  filter the result in an outer query or CTE.
+- State the tie policy before writing the query. `ROW_NUMBER` chooses one
+  row, `RANK` keeps every tied row, and `DENSE_RANK` ranks distinct values. A
+  check that expects one row per key fails visibly when it uses `RANK` and the
+  data contains a tie.
+- Use `SUM OVER` when a report or a bug attachment needs the detail rows and
+  the group total together. The window preserves the individual reviews, and a
+  running total shows where a value changed.
+- Use `LAG` and `LEAD` to test ordering rules: timestamps that must increase,
+  duplicate events, a rating that changes without an intervening action, or a
+  sequence that must advance by one. Decide whether a `NULL` means "no row" or
+  "a row with a `NULL` value", and pass a default when the difference matters.
+- Filter window results outside `WHERE`. Apply the condition in an outer query
+  or CTE, and use `HAVING` for a condition on a grouped aggregate.
+- Window functions run after `GROUP BY`, so a window over `COUNT(*)` or
+  `SUM(...)` operates on the grouped rows. That is how a rank-per-deck report
+  combines a group total with a rank without a second join.
+- Make the check reproducible: name a unique `ORDER BY` key inside `OVER`,
+  select the ordering columns, and state the partition in the bug report. A
+  result chosen from an arbitrary tie cannot be reproduced.
+
+### Watch-outs
+
+- Window functions are evaluated after `WHERE`, `GROUP BY`, and `HAVING`, and
+  before `ORDER BY`. They cannot appear in `WHERE`; filter the result in an
+  outer query or CTE.
+- `ROW_NUMBER` gives every row a different number but breaks ties
+  arbitrarily. Add a unique tiebreaker inside `OVER` when the chosen row must
+  be repeatable.
+- `RANK` leaves gaps after a tie and `DENSE_RANK` does not. Choose the one the
+  requirement describes, and write down the tie rule.
+- Without `PARTITION BY`, the window is the whole result. Partitioning by a
+  unique column produces one-row windows.
+- `SUM(...) OVER (...)` repeats the total on every row; it does not collapse
+  rows. A one-row-per-group report still needs `GROUP BY`.
+- With an `ORDER BY`, the default frame is a `RANGE` frame that includes
+  peers; it can differ from a row-by-row `ROWS` frame when the ordering ties.
+- `LAG` and `LEAD` need `ORDER BY` inside `OVER`. The default argument applies
+  only when the row is missing; a stored `NULL` stays `NULL`.
+- A window-function alias cannot be used later in the same `SELECT` list or
+  in `WHERE`. Wrap the first stage in a CTE when the logic needs two.
+- SQL Server requires `ORDER BY` in `OVER` for `ROW_NUMBER`, `RANK`,
+  `DENSE_RANK`, `LAG`, and `LEAD`; `SUM` accepts a window without one.
