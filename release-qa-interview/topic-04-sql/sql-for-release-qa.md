@@ -3641,3 +3641,755 @@ can repeat.
   in `WHERE`. Wrap the first stage in a CTE when the logic needs two.
 - SQL Server requires `ORDER BY` in `OVER` for `ROW_NUMBER`, `RANK`,
   `DENSE_RANK`, `LAG`, and `LEAD`; `SUM` accepts a window without one.
+
+## Part 10 — SQL Server Dialect and Tuning
+
+Parts 1 to 9 introduced SQL Server forms first and standard SQL forms second,
+one feature at a time. This part gathers those differences into one translation
+table, then turns to performance: how a SQL Server execution plan is read, how
+one execution is measured, and which query and index shapes let the optimizer
+use an index.
+
+Two rules frame the part. A translation is not a guarantee: every row of the
+dialect table is a place where the result must be rechecked, not only the
+spelling. And a tuning claim needs four things — the query, the predicate, the
+index, and the measurement — where the measurement is an execution plan or a
+statistics comparison. "Faster" without that evidence is a guess, and a guess
+is not a release finding.
+
+No database is installed in this repository, and no statement here was
+executed. The tuning examples describe what to capture and how to compare it;
+they do not report readings from the sample rows. The sample tables are also
+tiny — five cards and seven reviews — so the optimizer may scan even when an
+index exists. Evidence for an index or a rewrite has to come from a realistic
+copy of the data.
+
+### SQL Server vs Standard SQL
+
+The table puts SQL Server first and standard SQL second. Each row is a syntax
+translation; the paragraphs after the table cover the rows where the
+translation changes behaviour, not only spelling.
+
+| What you need | SQL Server (T-SQL) | Standard SQL |
+|---|---|---|
+| Limit the result | `SELECT TOP (n) ...`, or `ORDER BY ... OFFSET m ROWS FETCH NEXT n ROWS ONLY` | `SELECT ... FETCH FIRST n ROWS ONLY`; `OFFSET ... FETCH NEXT` is also standard |
+| Current date and time | `GETDATE()` (a `DATETIME`) or `SYSDATETIME()` (a `DATETIME2`), server local time | `CURRENT_TIMESTAMP` |
+| Replace a `NULL` | `ISNULL(expr, replacement)` | `COALESCE(a, b, ...)` |
+| Concatenate text | `+`, or `CONCAT(a, b, ...)` | `a \|\| b` |
+| Generate a key | `IDENTITY(1,1)` | `GENERATED ALWAYS AS IDENTITY` (or explicit IDs) |
+| Store a boolean | `BIT` | `BOOLEAN` |
+| Store text | `NVARCHAR(n)` | `VARCHAR(n)` |
+| Store a date and time | `DATETIME2` | `TIMESTAMP` |
+| Choose a value conditionally | `IIF(condition, a, b)` | `CASE WHEN condition THEN a ELSE b END` |
+| Do date arithmetic | `DATEADD(part, n, date)`, `DATEDIFF(part, start, end)` | `date + INTERVAL 'n' DAY`; subtracting two timestamps gives an interval |
+| Aggregate rows into text | `STRING_AGG(expr, ',')` | No single standard equivalent in this guide |
+
+**`TOP` and `FETCH`.** `TOP (n)` is SQL Server-only and belongs in the
+`SELECT` list. `OFFSET ... FETCH NEXT` is standard and SQL Server accepts it,
+but SQL Server requires `ORDER BY` with it. `FETCH FIRST n ROWS ONLY` is the
+shortest standard form used in this guide. A limit without a deterministic
+`ORDER BY` returns an arbitrary set; add a unique tiebreaker when the sample
+must be reproducible (Part 2).
+
+**Watch the name `TIMESTAMP`.** In SQL Server, `TIMESTAMP` is a synonym for
+`ROWVERSION`: an automatically generated binary value used for change
+tracking, not a date or a time. A SQL Server column declared `TIMESTAMP` holds
+no date, and comparing it with a date forces a conversion that is either an
+error or a meaningless result. Use `DATETIME2` for a date and time on SQL
+Server; the shared SQL Server schema does. Standard SQL's `TIMESTAMP` is the
+date and time type, which is why the two schema versions use different type
+names for the same idea.
+
+**Concatenation and `NULL`.** SQL Server's `+` operator returns `NULL` when
+either operand is `NULL`. `CONCAT` treats `NULL` as an empty string. Standard
+SQL's `||` returns `NULL` when either side is `NULL`, so it matches `+`, not
+`CONCAT`. Part 2's label for user 3, whose `display_name` is `NULL`, is the
+test case: a translation from `CONCAT` to `||` changes the label from text with
+an empty name part to `NULL`. To keep the `CONCAT` behaviour in standard SQL,
+wrap a nullable argument in `COALESCE(display_name, '')`; to get the `||`
+behaviour in SQL Server, use `+`, remembering that `+` is also arithmetic.
+
+**`ISNULL` and `COALESCE`.** `ISNULL(expr, replacement)` takes exactly two
+arguments and is SQL Server-only. `COALESCE(a, b, ...)` is standard, accepts
+any number of arguments, and also works in SQL Server, which makes it the
+portable choice. Their result types differ: `ISNULL` follows the first
+argument's type (except when the first argument is the literal `NULL`), so a
+replacement longer than the first argument can be truncated, while `COALESCE`
+returns the type chosen by data type precedence across all arguments. For a
+check that compares labels, a truncation or a type change is a result
+difference, not formatting.
+
+**`GETDATE`, `SYSDATETIME`, and `CURRENT_TIMESTAMP`.** `GETDATE()` returns a
+`DATETIME`; `SYSDATETIME()` returns a `DATETIME2` with more fractional-second
+precision. Both return the server's local clock, not the client's.
+`CURRENT_TIMESTAMP` is standard and, in SQL Server, is equivalent to
+`GETDATE()`. Capture the time once into a variable, or compare against a known
+literal; a query that reads the clock once per row can produce rows on both
+sides of a boundary. For UTC, Part 8 used `SYSUTCDATETIME()`; check the target
+product's own UTC function before translating that call.
+
+**`IDENTITY` and explicit IDs.** `IDENTITY(1,1)` makes SQL Server generate the
+next value on an insert. The standard spellings are `GENERATED ALWAYS AS
+IDENTITY` and `GENERATED BY DEFAULT AS IDENTITY`. The shared schema uses
+explicit IDs instead, because a known ID makes a sample row, a foreign-key
+check, and a bug report reproducible. An identity column generates a different
+ID on every test run, so a check that hard-codes an ID must read the generated
+value back first.
+
+**`IIF` and `CASE`.** `IIF(condition, a, b)` is SQL Server shorthand for a
+two-branch `CASE`. `CASE WHEN condition THEN a ELSE b END` is standard and
+works in SQL Server too, so `CASE` is the portable form. A `NULL` condition is
+not TRUE, so both forms take the false branch; `IIF` takes exactly three
+arguments, so use `CASE` when the logic needs more than one condition.
+
+**`DATEADD`, `DATEDIFF`, and intervals.** `DATEADD(day, 7, created_at)` adds
+seven days. The standard form adds an interval:
+`created_at + INTERVAL '7' DAY`. Subtraction differs more:
+`DATEDIFF(day, start, end)` counts day boundaries crossed, not complete days,
+so `DATEDIFF(day, '2026-01-01 23:59', '2026-01-02 00:01')` is 1 even though
+one minute passed. Standard timestamp subtraction returns an interval, which
+measures elapsed time. For a duration check, state the part and the boundary
+rule; for exact elapsed time, subtract in the application or use the smallest
+relevant part and test the boundary.
+
+**`STRING_AGG`.** `STRING_AGG(expr, separator)` aggregates rows into one
+string, with an optional `WITHIN GROUP (ORDER BY ...)` for order. No single
+standard equivalent is used in this guide; other products have their own
+aggregate (Oracle's `LISTAGG`, MySQL's `GROUP_CONCAT`), spelled differently. A
+query that uses `STRING_AGG` is a portability point, and a check that depends
+on the separator or the order must state both.
+
+**The type rows.** `NVARCHAR(n)` stores Unicode text; `VARCHAR(n)` uses the
+database's code page. `BIT` stores `0` or `1`, not `TRUE` or `FALSE`, and a
+report that displays a boolean must translate it. `DATETIME2` is the SQL Server
+date and time type; `TIMESTAMP` is not (see the warning above). The standard
+schema uses `VARCHAR`, `BOOLEAN`, and `TIMESTAMP`; the SQL Server schema uses
+`NVARCHAR`, `BIT`, and `DATETIME2`.
+
+### Reading Execution Plans
+
+An execution plan is the set of operators SQL Server uses to run one
+statement. Each operator reads, joins, sorts, or returns rows, and the arrows
+show rows moving from the data sources to the result. The plan is the evidence
+for how a query was answered; the result rows are not.
+
+**Estimated and actual plans.** SQL Server can produce an estimated plan
+without running the statement, and an actual plan while it runs. The estimated
+plan shows the operators and estimated row counts; the actual plan adds actual
+row counts, the number of executions of each operator, and warnings. The
+percentages beside operators are estimated costs, even in an actual plan; they
+locate expensive operators but are not measured time. An estimated plan is
+safe to capture on a production server because it does not execute; an actual
+plan of an `INSERT`, `UPDATE`, or `DELETE` does execute the change, so capture
+it only where the change is allowed and can be rolled back.
+
+**Read it from the result back to the data.** Start at the leftmost operator,
+the one that returns the result, and follow the arrows to the right. A thicker
+arrow means more rows. Click an operator to see its properties: the object
+(table or index), the seek predicates, the residual predicate,
+`Number of Rows Read`, `Actual Number of Rows`, `Estimated Number of Rows`,
+and `Number of Executions`.
+
+| Operator | What it means | What to check |
+|---|---|---|
+| Table Scan | Reads every row of a heap. | Whether an index could seek the predicate; whether most rows are genuinely needed. |
+| Index Scan | Reads the entries of an index. | Whether a predicate could seek a range; rows read versus rows returned. |
+| Index Seek | Uses the index keys to locate a range. | Which predicate supplied the seek; a seek that reads many rows to return few has a residual predicate. |
+| Key Lookup / RID Lookup | For each row found in a nonclustered index, fetches the remaining columns from the table. | `Number of Executions`; whether the query is covered. |
+| Sort | Orders rows for `ORDER BY`, `DISTINCT`, or a merge join. | Whether an index's key order could remove the sort; tempdb spill warnings. |
+| Hash Match | Builds a hash table for a join or aggregate. | Estimated versus actual rows; memory grant warnings. |
+| Nested Loops | Runs the inner input once per outer row. | Executions of the inner side; a loop over thousands of rows is suspect. |
+| Filter | Applies a predicate after rows are read. | Why the predicate did not seek; rows read versus rows returned. |
+
+**Estimated versus actual rows.** The most useful comparison is the estimated
+row count on an operator against the actual row count. A large gap is the
+first thing to explain: stale statistics, a predicate the optimizer cannot
+estimate, a correlated expression, or parameter sniffing (below). The gap
+often explains a join order, a scan choice, or a memory grant. Read it before
+proposing an index.
+
+**Warnings.** A yellow triangle on an operator is a warning. Common ones are
+an implicit conversion, a tempdb spill from a sort or hash, and a join without
+a predicate. Read the tooltip and put its text in the ticket; the warning
+often names the column and the conversion that the plan could not use.
+
+**A plan is not a correctness check.** A fast query can return the wrong rows,
+and a plan can be efficient for the wrong question. Check the result against
+the requirement separately, then use the plan to explain the cost.
+
+**Scans and seeks.** A scan is not automatically a problem and a seek is not
+automatically a win. A scan is efficient when the query needs most of the rows
+or the table is small. A seek followed by many key lookups can cost more than
+a scan, because each lookup fetches a row from the table. Read the row counts
+and the lookup executions, not only the operator name.
+
+**Sorts and hashes.** A Sort with a tempdb spill warning or a Hash Match with
+a large memory grant can dominate a statement. An index in the right key order
+can remove a Sort, but a sort-free plan is not always possible. Compare the
+cost and the reads rather than assuming that either operator is bad.
+
+### Measuring with STATISTICS IO and TIME
+
+`SET STATISTICS IO ON` and `SET STATISTICS TIME ON` make SQL Server report
+what one execution did. They are session settings: they stay on for later
+statements until set off, and they return messages, not rows.
+
+**SQL Server:**
+
+```sql
+SET STATISTICS IO ON;
+SET STATISTICS TIME ON;
+
+SELECT card_id, front
+FROM cards
+WHERE deck_id = 103
+ORDER BY created_at;
+
+SET STATISTICS IO OFF;
+SET STATISTICS TIME OFF;
+```
+
+The batch above is the shape of the measurement; no database is installed
+here, and no output is claimed. Read the `STATISTICS IO` message for `cards`:
+
+- **Scan count** is how many times the table or index was opened. A nested
+  loops join can run an inner seek more than once, so a count above 1 is a
+  clue to read the plan.
+- **Logical reads** is the number of 8 KB pages read from the buffer cache.
+  This is the comparison metric: it counts the pages the plan touched, so it
+  does not depend on whether they were already cached or on how busy the
+  server was. Compare logical reads for the same query and data before and
+  after a change.
+- **Physical reads** is pages read from disk, and **read-ahead reads** is
+  pages prefetched. Both depend on the cache state, so a cold first run and a
+  warm second run are not comparable. Compare logical reads instead, or state
+  the cache state deliberately.
+- **Lob logical reads** counts large-object pages; this schema has none, so
+  expect zero.
+
+The `STATISTICS TIME` message has two parts. The parse and compile line is the
+cost of turning the text into a plan; the execution line reports CPU time and
+elapsed time. CPU time is processor work summed across threads; elapsed time
+is wall clock, including waits and other load. Use CPU as the work measure,
+logical reads as the page measure, and note elapsed time as the user-visible
+result; do not treat one as the other. The parse and compile line is also
+where the per-call cost of `OPTION (RECOMPILE)` appears.
+
+**The comparison method.** Use the same query, the same data, and the same
+cache state, and change one thing at a time. Capture the actual plan and the
+`STATISTICS IO`/`TIME` messages before the change, apply one change (a rewrite
+or an index), and capture them again on the same dataset. Keep the first run
+separate from the repeat: the first may do physical reads, and the second may
+be fully cached. State the row counts, the cache state, and the server
+conditions in the ticket. On the sample tables the counts are tiny and the
+optimizer may scan anyway; a comparison at five rows does not predict
+production.
+
+**What the numbers cannot tell you.** Logical reads do not measure waits,
+blocking, or network time; a query with low reads can still be slow because it
+waits on a lock. They also do not measure correctness. A query that returns
+the wrong rows can have excellent reads.
+
+### SARGable Predicates
+
+A predicate is **SARGable** when the optimizer can use an index to search for
+the matching rows instead of reading every row and testing the predicate. The
+term comes from "search argument able". The usual shape is a bare column on
+one side of the comparison and a constant, variable, or parameter on the
+other; when a function or a conversion wraps the column, the sorted index
+cannot be used as the search argument.
+
+The four checks below cover most slow release queries. Each names the query,
+the predicate, the index, and the measurement; none promises a speedup,
+because the result depends on data volume, selectivity, and the plan.
+
+**1. Use a date range instead of a function on the date.** The first query
+applies `YEAR` to the indexed column, so the optimizer cannot seek on
+`created_at`:
+
+**SQL Server:**
+
+```sql
+SELECT card_id
+FROM cards
+WHERE YEAR(created_at) = 2026;
+```
+
+The second query compares the column itself with a half-open range, which can
+be a seek:
+
+**SQL Server:**
+
+```sql
+SELECT card_id
+FROM cards
+WHERE created_at >= '2026-01-01'
+  AND created_at < '2027-01-01';
+```
+
+Index, for both queries to consider:
+
+**SQL Server:**
+
+```sql
+CREATE NONCLUSTERED INDEX ix_cards_created_at
+    ON cards (created_at);
+```
+
+The predicate is the difference: `YEAR(created_at) = 2026` computes a value
+from the indexed column for every row, while the range leaves `created_at`
+bare. With the index, the range form can produce an Index Seek; the function
+form produces an Index Scan (or a table scan) with a residual filter.
+Measurement: with `SET STATISTICS IO ON`, compare logical reads for `cards`,
+and read the operator in the actual plan (Index Scan versus Index Seek). Both
+statements return all five cards, which were all created in January 2026. The
+range also fixes a correctness bug: `BETWEEN '2026-01-01' AND '2026-12-31'`
+stops at midnight on December 31 and misses the rest of that day, while
+`< '2027-01-01'` includes the whole year.
+
+**2. Do not start a `LIKE` pattern with a wildcard.** A leading wildcard gives
+the index no starting point, so every entry must be tested:
+
+**SQL Server and standard SQL:**
+
+```sql
+SELECT card_id, front
+FROM cards
+WHERE front LIKE '%cell%';
+```
+
+An anchored pattern can be turned into a range:
+
+**SQL Server and standard SQL:**
+
+```sql
+SELECT card_id, front
+FROM cards
+WHERE front LIKE 'What%';
+```
+
+Index, for the anchored form to consider:
+
+**SQL Server:**
+
+```sql
+CREATE NONCLUSTERED INDEX ix_cards_front
+    ON cards (front);
+```
+
+The predicate is the pattern: `%cell%` has no anchor, so the plan scans the
+index or the table; `What%` has a prefix, so the plan can seek the matching
+range. Measurement: read the actual plan for an Index Scan/Table Scan versus
+an Index Seek, and compare logical reads for `cards` and rows read versus rows
+returned. `%cell%` returns card 1001; `What%` returns all five cards. A
+substring search is a real requirement that a B-tree index cannot answer;
+full-text search is a different feature, and the scan may be the honest plan
+for the requirement.
+
+**3. Do not put a function on the indexed column.** The cast is computed for
+every row before the comparison, so the clustered key cannot be seeked:
+
+**SQL Server:**
+
+```sql
+SELECT card_id
+FROM cards
+WHERE CAST(card_id AS NVARCHAR(10)) = N'1001';
+```
+
+The bare comparison can seek the clustered primary key:
+
+**SQL Server and standard SQL:**
+
+```sql
+SELECT card_id
+FROM cards
+WHERE card_id = 1001;
+```
+
+The predicate is the difference: the cast wraps `card_id`, which is the
+clustered key; the bare equality leaves it alone. The first plan shows a
+Clustered Index Scan with a Compute Scalar or Filter; the second can show a
+Clustered Index Seek. Measurement: the operator in the actual plan and logical
+reads for `cards`. Both return card 1001. A function on the constant side is
+fine: `WHERE card_id = CAST(N'1001' AS INT)` converts one value rather than
+every row.
+
+**4. Align data types to avoid an implicit conversion.** SQL Server converts
+the side with the lower data type precedence. When that side is the column, an
+index on the column cannot be seeked. Here the variable is `DECIMAL`, which has
+higher precedence than the `INT` column, so `deck_id` is the column that
+converts:
+
+**SQL Server:**
+
+```sql
+DECLARE @deck_id DECIMAL(10, 0) = 101;
+SELECT card_id
+FROM cards
+WHERE deck_id = @deck_id;
+```
+
+Declaring the variable with the column's type keeps the conversion on the
+argument side:
+
+**SQL Server:**
+
+```sql
+DECLARE @deck_id INT = 101;
+SELECT card_id
+FROM cards
+WHERE deck_id = @deck_id;
+```
+
+The index is `ix_cards_deck_id` on `cards (deck_id)` from Part 8. The predicate
+is `deck_id = @deck_id`: in the first query the `INT` column is converted to
+`DECIMAL` for every row, so the index on `deck_id` cannot be seeked; in the
+second the variable matches the column and the index can be seeked. The first
+plan shows the conversion on `deck_id` and, in current versions, may add a
+conversion warning; the second does not. Measurement: the actual
+plan and `STATISTICS IO` logical reads for `cards`. Both return cards 1001 and
+1002. If a third-party tool sends a `DECIMAL`, casting the argument to `INT`
+also moves the conversion off the column, but only when the value is known to
+be a whole number.
+
+**The claim rule.** Every check above names the query, the predicate, the
+index, and the measurement. None of them says "this is faster": the evidence
+is the plan and the logical reads on the same data, and the sample tables are
+too small to supply it.
+
+### Indexes and Covering Queries
+
+Part 8 defined the structures: a clustered index's leaf level is the table's
+data, a nonclustered index is a separate structure with sorted keys and a row
+locator, and a covering index contains every column a query reads. This
+section uses those structures to explain two plans: a seek that reads the
+right rows in the right order, and a seek that has to visit the table for
+columns the index does not hold.
+
+**Key order: equality first, then the order column.** An index on
+`(card_id, reviewed_at)` sorts by `card_id` first and by `reviewed_at` within a
+card. The query below filters on the first key and orders by the second:
+
+**SQL Server:**
+
+```sql
+CREATE NONCLUSTERED INDEX ix_reviews_card_reviewed
+    ON reviews (card_id, reviewed_at)
+    INCLUDE (user_id, rating);
+```
+
+**SQL Server and standard SQL:**
+
+```sql
+SELECT review_id, user_id, rating
+FROM reviews
+WHERE card_id = 1001
+ORDER BY reviewed_at;
+```
+
+Expected rows: review 10001 with rating 5, then review 10002 with rating 4.
+`card_id = 1001` is an equality on the leftmost key, so the seek goes straight
+to the card's entries; those entries are ordered by `reviewed_at`, so the
+`ORDER BY` needs no Sort. `user_id` and `rating` are included, and `review_id`
+is the clustered key, which every nonclustered index on this table carries.
+The query is covered. Measurement: the actual plan should show an Index Seek
+with no Key Lookup and no Sort; `STATISTICS IO` reports the logical reads for
+`reviews`. Compare that with the plan for the same query before the index:
+capture both, on the same data. On seven reviews the optimizer may scan; the
+comparison becomes meaningful with volume.
+
+**The leftmost key limits the seek.** The same index does not help a query
+that filters only on the second key:
+
+**SQL Server and standard SQL:**
+
+```sql
+SELECT review_id
+FROM reviews
+WHERE reviewed_at >= '2026-01-24';
+```
+
+There is no predicate on `card_id`, so the index cannot seek its `reviewed_at`
+entries; the plan may scan the index or the table and filter. An index with
+`reviewed_at` first would give the predicate a seek. Measurement: the actual
+plan (Index Scan versus Index Seek) and logical reads for `reviews`. The
+result is reviews 10005, 10006, and 10007. The rule is the leftmost prefix: an
+index can seek on a prefix of its keys, starting with the first.
+
+**Key lookup and covering.** A nonclustered index on `cards (deck_id)` lets
+this query find the two cards in deck 101, but `front` is not in the index:
+
+**SQL Server and standard SQL:**
+
+```sql
+SELECT card_id, front
+FROM cards
+WHERE deck_id = 101;
+```
+
+`card_id` is the clustered key, so it is present in the index; `front` is not.
+The plan may show an Index Seek followed by a Key Lookup for each returned
+row, or the optimizer may choose a scan on five rows. Measurement: read the
+actual plan for a Key Lookup, and check its `Number of Executions` against the
+number of rows the seek returned; check the logical reads for `cards`. The Key
+Lookup's cost grows with the number of rows, which is why a covering index is
+worth considering for a query that returns many rows.
+
+The covering version adds `front` to the index leaf:
+
+**SQL Server:**
+
+```sql
+CREATE NONCLUSTERED INDEX ix_cards_deck_front
+    ON cards (deck_id)
+    INCLUDE (front);
+```
+
+The same query is now answered from the index alone: no Key Lookup, and the
+logical reads for `cards` count only the index pages. Measurement: compare the
+actual plans and the logical reads before and after, on the same data. The
+`INCLUDE` columns are stored at the leaf and cannot be used to seek or to
+order rows; they exist so the query can read their values without visiting the
+table.
+
+**Write cost.** Every index is maintained by every `INSERT`, `UPDATE`, and
+`DELETE` on the table. The covering index above stores the `front` text for
+every card, so it duplicates that text, grows with it, and must be updated
+whenever `front` changes. More indexes mean more work per write, more storage,
+and more log. A new index also changes the optimizer's choices for every query
+on the table. Propose an index with the query, the plan, and the reads that
+justify it, and name the write cost; get approval before creating or dropping
+one on a shared or production system (Part 8).
+
+### Query Habits
+
+These habits either prevent a wrong result or reduce work. The performance
+habits still need the same measurement as the rest of the part.
+
+**Avoid `SELECT *`.** Name the columns the check needs. A result whose column
+list is fixed is stable when a release adds a column, and a query that names
+its columns can be covered by an index. With the covering index
+`ix_cards_deck_front` from the previous section, `SELECT card_id, front FROM
+cards WHERE deck_id = 101` is covered: `card_id` is the clustered key,
+`deck_id` is the key, and `front` is included. `SELECT *` also reads `back`
+and `created_at`, so the plan needs a Key Lookup (or a scan) and touches more
+pages. Measurement: the actual plan (Key Lookup present or absent) and the
+logical reads for `cards`. On five cards the optimizer may scan either way;
+the difference is the columns and the lookup count at volume.
+
+**Use `UNION ALL` unless deduplication is required.** `UNION` removes
+duplicate rows from the combined result; `UNION ALL` keeps every row and
+concatenates the inputs. The requirement decides which is correct. The QA
+staging table `legacy_users` (Part 11) holds user 1 and user 2 again, plus a
+second Alice row for user 3 with the same email:
+
+**SQL Server and standard SQL:**
+
+```sql
+SELECT user_id, email FROM users
+UNION ALL
+SELECT user_id, email FROM legacy_users;
+```
+
+This returns 9 rows: 5 users and 4 legacy rows, including the repeated IDs and
+the duplicate email. `UNION` returns 7 rows, because it removes rows that are
+identical in every selected column; the two Alice emails survive because their
+`user_id` values differ. Measurement: the `UNION` plan contains a Distinct
+Sort or a Hash Match aggregate, the `UNION ALL` plan does not; compare logical
+reads and row counts. If the question is "one row per value", `UNION` is
+right; if duplicates are expected or harmless, `UNION ALL` avoids the
+deduplication work. The recheck is the row count: 9 versus 7.
+
+**Prefer `EXISTS` to `NOT IN` when `NULL` is possible.** Part 3 showed the
+trap: if the subquery returns a `NULL`, `NOT IN` compares every outer value
+with `NULL`, and the result is UNKNOWN, so the query returns no rows.
+`NOT EXISTS` asks the question as existence:
+
+**SQL Server and standard SQL:**
+
+```sql
+SELECT c.card_id
+FROM cards AS c
+WHERE NOT EXISTS (
+    SELECT 1
+    FROM reviews AS r
+    WHERE r.card_id = c.card_id
+);
+```
+
+This returns card 1005, the card without reviews. The subquery's `card_id` is
+`NOT NULL` here, so `NOT IN` would also return the right row in this case; the
+habit matters when the column is nullable or the subquery is not under your
+control. `EXISTS` asks whether at least one row matches, so the engine can
+stop at the first match; the `NOT EXISTS` plan may show an anti semi join.
+Measurement: compare the actual plans and logical reads, but decide
+correctness first. The
+select list of an `EXISTS` subquery is irrelevant to the result; `SELECT 1`
+and `SELECT *` are equivalent for existence.
+
+**Filter rows in `WHERE`, not `HAVING`.** `WHERE` filters rows before grouping;
+`HAVING` filters groups after. A predicate on a grouping column can be written
+either way, and the result is the same:
+
+**SQL Server and standard SQL:**
+
+```sql
+SELECT card_id, COUNT(*) AS review_count
+FROM reviews
+WHERE card_id = 1001
+GROUP BY card_id;
+```
+
+The `HAVING card_id = 1001` version returns the same row, 1001 with 2 reviews,
+but it filters after the aggregate. The `WHERE` form states the intent and
+gives the optimizer a row predicate it can use before grouping. Measurement:
+compare the actual plans and logical reads; if the plans are identical, the
+rewrite changed nothing, which is a valid finding. Part 4 covers `HAVING`.
+
+**Do not use `WITH (NOLOCK)` as a tuning fix.** `WITH (NOLOCK)` is a SQL Server
+table hint equivalent to `READUNCOMMITTED` for that reference:
+
+**SQL Server:**
+
+```sql
+SELECT COUNT(*) AS card_count
+FROM cards WITH (NOLOCK);
+```
+
+The hint lets the statement skip shared locks, but it can read uncommitted
+rows that later roll back, read the same row twice or miss a row when pages
+move during a scan, and return a count that was never true at any single
+moment. `WITH (NOLOCK)` is a correctness risk, not a tuning fix. It also does
+not guarantee zero blocking: a schema change can still block the reader. For
+release evidence, run the check under the default isolation level, or at a
+level you name, and report that level. If you must use the hint on a busy
+system, label the result provisional and rerun before filing. The standard
+defines isolation levels but no table hint, so `WITH (NOLOCK)` is T-SQL.
+
+### Parameter Sniffing and OPTION (RECOMPILE)
+
+A parameterized statement is compiled into a plan, and SQL Server can cache
+that plan for reuse. The optimizer estimates row counts from the parameter
+values supplied at compilation, and those estimates drive the join order, the
+choice between a seek and a scan, and the memory grant. If the first call's
+values are atypical, the cached plan can be a poor fit for later calls with
+different values. That is **parameter sniffing**.
+
+The statement below is the shape the application sends, with `@card_id`
+supplied as a parameter (a prepared statement or a procedure; this guide does
+not define the procedure):
+
+**SQL Server:**
+
+```sql
+SELECT review_id, rating
+FROM reviews
+WHERE card_id = @card_id
+ORDER BY reviewed_at;
+```
+
+With the `ix_reviews_card_reviewed` index from the previous section, one plan
+might suit a card with a handful of reviews and be the wrong choice for a card
+with thousands, or the reverse. The seven sample reviews cannot reproduce that
+difference; the scenario needs production-like skew. SQL Server 2022's
+Parameter Sensitive Plan optimization can keep more than one plan variant for
+a statement whose values are skewed, when the database compatibility level
+enables it; it reduces the problem for some queries, but it does not replace
+the measurement.
+
+**Evidence for sniffing.** Run the same statement with at least two parameter
+values: one typical and one extreme. Read the actual plan for each execution.
+The sign is a large gap between the plan's `Estimated Number of Rows` (from
+the value used at compilation) and `Actual Number of Rows` (from the current
+value), with the same cached plan shape for both. `SET STATISTICS IO ON` and
+`SET STATISTICS TIME ON` then show the logical reads and CPU time for each
+value. A claim of sniffing needs that comparison; a single slow execution does
+not prove it.
+
+**`OPTION (RECOMPILE)` as a targeted fix.** The hint makes SQL Server compile
+the statement on each execution with the current parameter values, and the
+plan is not cached for that statement:
+
+**SQL Server:**
+
+```sql
+SELECT review_id, rating
+FROM reviews
+WHERE card_id = @card_id
+ORDER BY reviewed_at
+OPTION (RECOMPILE);
+```
+
+Each execution gets a plan fitted to its own value. The cost is a compile on
+every execution; the parse and compile line of `STATISTICS TIME` shows it. Use
+the hint for the one statement whose cached plan the evidence shows is wrong
+for the values in use, not as a default on every query and not for a statement
+executed thousands of times per second. It is a T-SQL query hint with no
+standard equivalent. It also treats the symptom rather than the distribution:
+an index, refreshed statistics, or a rewrite may be the better fix, and each
+needs its own measurement.
+
+### Release QA Use
+
+- When a release check is slow, capture the query text, its parameter values,
+  the actual plan, the index definitions, the `STATISTICS IO` logical reads,
+  and the `STATISTICS TIME` CPU time. Attach them to the ticket; a claim
+  without them is not actionable.
+- Compare the same query and data before and after one change, and state the
+  row count and cache state. Do not compare a cold first run with a warm
+  second run, and do not call a five-row result a performance finding.
+- Use the dialect table when translating a check, then verify the row count,
+  not only that the statement parses. The `NULL` rules for `+`, `CONCAT`,
+  `ISNULL`/`COALESCE`, and `TIMESTAMP` change results, not just syntax.
+- Review a slow predicate against the four SARGable shapes before proposing
+  an index: a date range, no leading wildcard, no function on the column, and
+  aligned data types. Name the index and the measurement in the proposal.
+- Propose a covering index with the query, the plan, the logical reads before
+  and after, and the write cost. Get approval before creating or dropping an
+  index on a shared or production system (Part 8).
+- Use `UNION ALL` when duplicates are expected or harmless and `UNION` when
+  the requirement is distinct rows. Use `EXISTS`/`NOT EXISTS` for exclusion
+  checks over nullable columns; check the row count as well as the plan.
+- Treat a parameter-sniffing plan as a hypothesis until the statement is
+  measured with at least two parameter values. If the evidence supports it,
+  propose `OPTION (RECOMPILE)` for that one statement and record the compile
+  cost.
+- Do not use `WITH (NOLOCK)` to make a check finish. A count that can read
+  uncommitted, duplicated, or missing rows is not evidence; record the
+  isolation level used for any release result.
+- Report the before and after values for logical reads and CPU time on the
+  same dataset. "Faster" without them is not a finding, and this guide's tiny
+  sample tables cannot supply them.
+
+### Watch-outs
+
+- SQL Server `TIMESTAMP` is `ROWVERSION`, not a date or time. Use `DATETIME2`;
+  a `TIMESTAMP` column cannot store the `created_at` values in this guide.
+- SQL Server `+` returns `NULL` if either string is `NULL`; `CONCAT` treats
+  `NULL` as an empty string; standard `||` returns `NULL` if either side is
+  `NULL`. A translated label can change from text to `NULL`.
+- `TOP (n)` and `FETCH FIRST n ROWS ONLY` are different syntaxes. `TOP`
+  without `ORDER BY` returns an arbitrary set, and `OFFSET ... FETCH NEXT`
+  requires `ORDER BY` in SQL Server.
+- The estimated plan's cost percentages are estimates, not measured time.
+  Actual row counts require the actual plan, and capturing an actual plan of a
+  data-changing statement executes it.
+- A scan is not automatically bad and a seek is not automatically good. A seek
+  that feeds thousands of key lookups can cost more than a scan; read the row
+  counts.
+- Logical reads are the comparison metric; physical reads and elapsed time
+  depend on cache state and load. A single run, especially the first after a
+  restart, is not evidence.
+- `OPTION (RECOMPILE)` costs a compile on every execution. It is a targeted fix
+  for one statement, not a default, and it has no standard equivalent.
+- `WITH (NOLOCK)` can return uncommitted, duplicated, or missing rows; it is a
+  correctness risk, not a tuning fix. It can also still be blocked by a schema
+  change.
+- `SELECT *` prevents a covering index and changes the result when the schema
+  changes. `UNION` deduplicates while `UNION ALL` does not, and `NOT IN` over
+  a nullable column can return no rows.
+- Every index adds write work and storage; a wide `INCLUDE` duplicates data.
+  Covering is a property of one query, not of the index.
+- A function, a cast, or a type mismatch on the indexed column prevents a
+  seek; check the plan for the conversion and align the types.
