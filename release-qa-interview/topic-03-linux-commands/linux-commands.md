@@ -1744,3 +1744,116 @@ listener for a local check.
 
 **Watch out:** Netcat variants differ; `-z` may not exist on every version, and
 `curl` or `ss` may be the better tool.
+
+## Part 10 — Release QA Workflows
+
+### Artifact checks
+
+Confirm what was built before anyone downloads it:
+
+```bash
+ls -lh artifacts/
+sha256sum artifacts/app.zip
+tar -tzf artifacts/app.tar.gz | head -n 20
+find releases/2026-11-18 -maxdepth 2 -type f
+```
+
+Check the name, size, checksum, archive contents, and the expected file list.
+A checksum that does not match the published value is a release blocker.
+
+### Log triage
+
+Start with the recent window, then narrow:
+
+```bash
+tail -n 100 /var/log/myapp/app.log
+grep -i error /var/log/myapp/app.log | tail -n 50
+journalctl -u myapp --since '30 minutes ago' -p err
+less /var/log/myapp/app.log
+```
+
+`tail` gives the recent context, `grep` finds the symptom, `journalctl` covers
+services that log to the journal, and `less` is for reading a large file without
+flooding the terminal.
+
+### Service status
+
+Confirm the service is running and look at its recent logs:
+
+```bash
+systemctl status myapp --no-pager
+journalctl -u myapp -n 50 --no-pager
+pgrep -af myapp
+```
+
+`systemctl status` shows the unit and its last lines; `journalctl` shows the
+service log; `pgrep` confirms the process. If the service is inactive, restart
+it only when that is part of the test or the approved runbook.
+
+### Port and endpoint checks
+
+Check the listener before blaming the application:
+
+```bash
+ss -tulpn
+nc -vz staging.example.com 443
+curl -I https://staging.example.com/health
+```
+
+`ss` shows listening ports, `nc` tests a TCP port, and `curl -I` checks the HTTP
+status and headers. A closed port, a refused connection, and a 500 response are
+three different findings.
+
+### Permission and disk checks
+
+Check access and space before a long run:
+
+```bash
+ls -l /var/log/myapp/app.log
+id
+df -h
+du -sh artifacts/
+```
+
+`ls -l` and `id` explain a permission failure; `df` and `du` explain a full
+volume. A full disk or an unwritable artifact directory fails tests that have
+nothing to do with the application.
+
+### Release-day checklist
+
+1. Confirm the build artifact exists, has the expected size, and matches its
+   checksum.
+2. Check free space on the artifact and log volumes.
+3. Confirm the service is active and its recent logs are clean.
+4. Check the listening port and the health endpoint.
+5. Run the smoke or regression suite with output saved to an artifact log.
+6. Record the exit code, the evidence paths, and any residual risk in the test
+   summary.
+
+## macOS Quick Reference
+
+Most everyday commands are the same: `ls`, `cd`, `cp`, `mv`, `rm`, `mkdir`,
+`cat`, `less`, `head`, `tail`, `grep`, `wc`, `cut`, `sort`, `uniq`, `tee`,
+`ssh`, `scp`, `sftp`, `curl`, `ping`, `dig`, `tar`, `gzip`, `zip`, `unzip`,
+`chmod`, `chown`, `kill`, `ps`, `top`, `env`, and `export`. The differences are
+concentrated in service management, logs, system information, and a few flags.
+
+| Task | Linux | macOS |
+|---|---|---|
+| Services | `systemctl` | `launchctl` |
+| Service logs | `journalctl` | `log show`, `log stream` |
+| Addresses | `ip addr` | `ifconfig`, `networksetup` |
+| Sockets | `ss` | `netstat`, `lsof -i` |
+| Memory | `free` | `vm_stat`, `top` |
+| Packages | `apt`, `dnf` | Homebrew (`brew`) |
+| Color `ls` | `ls --color` | `ls -G` |
+| Extended regex | `grep -P` (GNU) | not standard |
+| Structured `stat` | `stat -c` | `stat -f` |
+| Date arithmetic | `date -d` | `date -v` |
+| Resolve symlinks | `readlink -f` | not standard; `greadlink` via coreutils |
+| Home directories | `/home` | `/Users` |
+| Filesystem case | usually case-sensitive | case-insensitive by default |
+
+The guide is written for Linux because that is what most release QA
+environments use. The macOS note beside each command tells you whether the
+command works unchanged or what to use instead.
