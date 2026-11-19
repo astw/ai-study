@@ -4796,8 +4796,9 @@ result. Alias that source as `before_release` and the live table or view as
 `after_release`; the join and the `IS NULL` tests do not change. The baseline
 must come from the same database and the same key definition as the live side,
 or the comparison reports differences that are really environment differences.
-A set difference reports only one direction and drops rows whose value changed;
-the full outer join reports both directions and the change in one pass.
+A set difference reports keys from one side only and cannot place the before
+and after values side by side; the full outer join reports both directions and
+the change in one row.
 
 ### Status Distributions
 
@@ -4933,7 +4934,8 @@ transaction and roll it back for every check that can stay in one session.
 ### Query Review Checklist
 
 Run this review on a check before you share it, and again when a check returns
-an unexpected result. Each row is a question with a failing example.
+an unexpected result. Each row is a question, the condition that passes it, and
+the part that teaches the detail.
 
 | Review question | What passing looks like | Where |
 |---|---|---|
@@ -5044,11 +5046,12 @@ that was not measured is an opinion.
 ## Dialect Portability
 
 SQL Server is the primary track in this guide. SQL Server (T-SQL) syntax comes
-first, and every example is written for current SQL Server. Standard SQL is the
-comparison track: where the two differ, the standard form comes second, so a
-reader can recognize the portable shape. Other databases may differ. This guide
-does not promise that a third database accepts any statement shown here, and it
-does not cover any other product's administration or dialect.
+first, and the SQL Server examples are written for current SQL Server. Standard
+SQL is the comparison track: where the two differ, the standard form comes
+second, so a reader can recognize the portable shape. Other databases may
+differ. This guide does not promise that a third database accepts any statement
+shown here, and it does not cover any other product's administration or
+dialect.
 
 The forms `LIMIT`, `AUTO_INCREMENT`, `IFNULL`, `NOW()`, and `GROUP_CONCAT` are
 examples of other-vendor syntax that this guide does not teach. Each has its own

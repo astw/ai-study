@@ -24,10 +24,12 @@ not need a database to read the guide, but you do need one to practice.
 ## Dialects
 
 SQL Server (T-SQL) is the primary track. Examples appear under a
-`**SQL Server:**` label first. When standard SQL differs, the portable form
-follows under `**Standard SQL:**`. A statement shown under one label is not a
-promise that the other dialect accepts it, and this folder makes no claim about
-MySQL, PostgreSQL, Oracle, or any other third database.
+`**SQL Server:**` label first; statements that are identical in both tracks are
+labeled `**SQL Server and standard SQL:**`. When standard SQL differs, the
+portable form follows under `**Standard SQL:**`. A statement shown under one
+dialect's label is not a promise that the other dialect accepts it, and this
+folder makes no claim about MySQL, PostgreSQL, Oracle, or any other third
+database.
 
 ## Study order
 
