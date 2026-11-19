@@ -380,3 +380,496 @@ batch snapshot for a bug report.
 
 **Watch out:** `top` is interactive by default; use batch mode when writing
 output to a file or a script.
+
+## Part 2 — Files and Folders
+
+### `mkdir`
+
+**Day-to-day.** Create directories.
+
+| Flag | What it does |
+|---|---|
+| `-p` | Create missing parent directories |
+| `-v` | Print each directory created |
+
+**Linux:**
+
+```bash
+mkdir -p releases/2026-11-18/logs
+mkdir -v artifacts
+```
+
+**macOS:** Same commands.
+
+**Release QA use:** Create a dated release directory and its log folder before
+copying artifacts.
+
+**Watch out:** Without `-p`, a missing parent makes the command fail.
+
+### `touch`
+
+**Frequent.** Create empty files or update timestamps.
+
+| Flag | What it does |
+|---|---|
+| `-c` | Do not create the file if it is missing |
+| `-t` | Set an explicit timestamp |
+
+**Linux:**
+
+```bash
+touch artifacts/.keep
+touch -c app.log
+```
+
+**macOS:** Same commands.
+
+**Release QA use:** Create placeholder files or refresh a timestamp so sort and
+find tests have predictable data.
+
+**Watch out:** `touch` fails in a read-only directory; `-c` avoids creating a
+file by accident.
+
+### `cp`
+
+**Day-to-day.** Copy files and directories.
+
+| Flag | What it does |
+|---|---|
+| `-r` | Copy directories recursively |
+| `-p` | Preserve mode, ownership, and timestamps |
+| `-v` | Print each file copied |
+
+**Linux:**
+
+```bash
+cp app.zip artifacts/
+cp -r releases/2026-11-18 artifacts/
+cp -p config.yml backups/
+```
+
+**macOS:** Same commands; `-r`, `-p`, and `-v` work the same.
+
+**Release QA use:** Copy a build into the artifact folder while preserving its
+timestamp for the release record.
+
+**Watch out:** Copying a directory into an existing directory can nest it one
+level deeper than expected; check the result with `ls`.
+
+### `mv`
+
+**Day-to-day.** Move or rename files and directories.
+
+| Flag | What it does |
+|---|---|
+| `-i` | Ask before overwriting |
+| `-v` | Print each move |
+
+**Linux:**
+
+```bash
+mv app.zip artifacts/
+mv build old-build
+```
+
+**macOS:** Same commands.
+
+**Release QA use:** Rename a build by version or move old logs into an archive
+directory.
+
+**Watch out:** `mv` overwrites silently by default; use `-i` for important
+files.
+
+### `rm`
+
+**Day-to-day.** Remove files and directories.
+
+| Flag | What it does |
+|---|---|
+| `-r` | Remove directories recursively |
+| `-i` | Ask before each removal |
+| `-f` | Force removal without prompts |
+
+**Linux:**
+
+```bash
+rm old.log
+rm -r temp-build
+rm -i artifacts/app.zip
+```
+
+**macOS:** Same commands; there is no trash or recycle bin on the command line.
+
+**Release QA use:** Clean temporary build folders, but never delete the only
+copy of a log or artifact that supports a bug report.
+
+**Watch out:** `rm -rf` is permanent; scope the path carefully and never run it
+against `/` or an unresolved variable.
+
+### `ln`
+
+**Frequent.** Create hard links or symbolic links.
+
+| Flag | What it does |
+|---|---|
+| `-s` | Create a symbolic link |
+| `-f` | Replace an existing link |
+
+**Linux:**
+
+```bash
+ln -s releases/2026-11-18 current
+ls -l current
+```
+
+**macOS:** Same commands.
+
+**Release QA use:** Point a stable `current` link at the build under test.
+
+**Watch out:** A relative symlink resolves from the link's directory, not your
+working directory; use an absolute target or check with `readlink`.
+
+### `find`
+
+**Day-to-day.** Search for files by name, type, size, and modification time.
+
+| Flag | What it does |
+|---|---|
+| `-name` | Match a filename pattern |
+| `-type` | Filter by file type |
+| `-size` | Filter by size |
+| `-mtime` | Filter by modification time in days |
+| `-maxdepth` | Limit how deep to search |
+
+**Linux:**
+
+```bash
+find releases -maxdepth 2 -type f -name '*.zip'
+find /var/log/myapp -type f -mtime -1
+find artifacts -type f -size +100M
+```
+
+**macOS:** The same filters work; `-printf` is GNU-only and not portable.
+
+**Release QA use:** Find recent logs, oversized artifacts, or files from the
+current release window.
+
+**Watch out:** `find` walks everything under the path; scope it with
+`-maxdepth`, and treat `-delete` as destructive.
+
+### `stat`
+
+**Frequent.** Show file metadata: size, permissions, and timestamps.
+
+| Flag | What it does |
+|---|---|
+| `-c` | Choose output fields (Linux) |
+| `-f` | Choose output fields (macOS) |
+
+**Linux:**
+
+```bash
+stat artifacts/app.zip
+stat -c '%n %s %y' artifacts/app.zip
+```
+
+**macOS:** Use `stat artifacts/app.zip` or
+`stat -f '%N %z %Sm' artifacts/app.zip`.
+
+**Release QA use:** Check an artifact's size and modification time against the
+build manifest.
+
+**Watch out:** `-c` and `-f` are not interchangeable between GNU and BSD.
+
+### `file`
+
+**Frequent.** Identify a file's type from its contents.
+
+| Flag | What it does |
+|---|---|
+| `-b` | Print the type without the filename |
+
+**Linux:**
+
+```bash
+file artifact.zip
+file -b app
+```
+
+**macOS:** Same commands.
+
+**Release QA use:** Confirm an artifact is the expected type — a zip, an ELF
+binary, or a shell script — before release.
+
+**Watch out:** The extension does not prove the type; `file` reads the content.
+
+### Reading paths
+
+An **absolute path** starts at `/`, such as `/var/log/myapp/app.log`. A
+**relative path** starts from your current directory, such as
+`releases/2026-11-18`. `~` means your home directory, `.` means the current
+directory, and `..` means the parent.
+
+Globs expand before the command runs: `*` matches any characters, `?` matches
+one character, and `[abc]` matches one of the listed characters. Quote a path
+that contains spaces: `"artifacts/my build.zip"`.
+
+## Part 3 — Viewing and Searching Text and Logs
+
+### `cat`
+
+**Day-to-day.** Print a file to the terminal.
+
+| Flag | What it does |
+|---|---|
+| `-n` | Number the output lines |
+
+**Linux:**
+
+```bash
+cat app.log
+cat -n config.yml
+```
+
+**macOS:** Same commands.
+
+**Release QA use:** Read a small config or a short artifact; use `less` or
+`tail` for a large log.
+
+**Watch out:** `cat` on a huge log floods the terminal and can hide the part
+you need.
+
+### `less`
+
+**Day-to-day.** Page through a file and search inside it.
+
+| Key | What it does |
+|---|---|
+| `/pattern` | Search forward |
+| `n` | Next match |
+| `G` | Go to the end |
+| `g` | Go to the start |
+| `q` | Quit |
+
+**Linux:**
+
+```bash
+less /var/log/myapp/app.log
+```
+
+**macOS:** Same command.
+
+**Release QA use:** Search a large log without loading all of it into the
+terminal.
+
+**Watch out:** `less` is interactive; use `grep` or `tail` in scripts.
+
+### `head`
+
+**Day-to-day.** Show the start of a file.
+
+| Flag | What it does |
+|---|---|
+| `-n 20` | Show the first 20 lines |
+
+**Linux:**
+
+```bash
+head -n 20 app.log
+```
+
+**macOS:** Same command.
+
+**Release QA use:** Check the header of a log, CSV, or build manifest.
+
+**Watch out:** `head` closes the pipe early; a producer may see a broken pipe.
+
+### `tail`
+
+**Day-to-day.** Show the end of a file and follow it as it grows.
+
+| Flag | What it does |
+|---|---|
+| `-n 100` | Show the last 100 lines |
+| `-f` | Follow the file |
+| `-F` | Follow the file name across rotation |
+
+**Linux:**
+
+```bash
+tail -n 100 /var/log/myapp/app.log
+tail -f /var/log/myapp/app.log
+tail -F /var/log/myapp/app.log
+```
+
+**macOS:** Same commands; `-f` and `-F` work the same.
+
+**Release QA use:** Follow a service log during a smoke test, or attach the
+last 100 lines to a bug report.
+
+**Watch out:** `-f` can stop when the file is rotated or truncated; use `-F`
+when rotation is possible.
+
+### `grep`
+
+**Day-to-day.** Search text for a pattern.
+
+| Flag | What it does |
+|---|---|
+| `-i` | Ignore case |
+| `-n` | Show line numbers |
+| `-r` | Search a directory recursively |
+| `-v` | Invert the match |
+| `-c` | Count matching lines |
+
+**Linux:**
+
+```bash
+grep -i error app.log
+grep -rn 'timeout' /var/log/myapp
+grep -v health app.log
+```
+
+**macOS:** Same flags; `-P` is GNU-only and not portable.
+
+**Release QA use:** Find errors, exclude noisy health checks, and count how
+often a message appears.
+
+**Watch out:** `grep` exits 0 for a match, 1 for no match, and 2 for an error;
+a script must distinguish "no match" from "bad pattern or unreadable file."
+
+### `wc`
+
+**Frequent.** Count lines, words, and bytes.
+
+| Flag | What it does |
+|---|---|
+| `-l` | Count lines |
+| `-w` | Count words |
+| `-c` | Count bytes |
+
+**Linux:**
+
+```bash
+wc -l app.log
+grep -i error app.log | wc -l
+```
+
+**macOS:** Same commands.
+
+**Release QA use:** Count errors or requests in a log.
+
+**Watch out:** `wc -l` counts newline characters; a final line without a
+newline is not counted.
+
+### `cut`
+
+**Frequent.** Extract fields or characters from each line.
+
+| Flag | What it does |
+|---|---|
+| `-d` | Set the delimiter |
+| `-f` | Choose fields |
+| `-c` | Choose characters |
+
+**Linux:**
+
+```bash
+cut -d' ' -f1 app.log
+cut -d',' -f2,3 report.csv
+```
+
+**macOS:** Same commands.
+
+**Release QA use:** Pull the timestamp or status code from a log or CSV.
+
+**Watch out:** `-d` takes a single character; a multi-character delimiter needs
+another tool.
+
+### `sort`
+
+**Day-to-day.** Sort lines.
+
+| Flag | What it does |
+|---|---|
+| `-n` | Sort numerically |
+| `-r` | Reverse the order |
+| `-k` | Sort by a field |
+| `-u` | Remove duplicate lines |
+
+**Linux:**
+
+```bash
+sort app.log
+sort -n counts.txt
+sort -t',' -k3 -n report.csv
+```
+
+**macOS:** Same commands.
+
+**Release QA use:** Order log lines or counts, and prepare input for `uniq`.
+
+**Watch out:** The default sort is lexicographic; use `-n` for numbers.
+
+### `uniq`
+
+**Frequent.** Collapse adjacent duplicate lines.
+
+| Flag | What it does |
+|---|---|
+| `-c` | Count each group |
+| `-d` | Show only duplicate groups |
+| `-u` | Show only unique lines |
+
+**Linux:**
+
+```bash
+sort app.log | uniq -c
+sort app.log | uniq -c | sort -nr | head
+```
+
+**macOS:** Same commands.
+
+**Release QA use:** Count repeated error messages in a log.
+
+**Watch out:** `uniq` only removes adjacent duplicates; sort the input first.
+
+### `tee`
+
+**Frequent.** Write output to the screen and to a file.
+
+| Flag | What it does |
+|---|---|
+| `-a` | Append instead of overwrite |
+
+**Linux:**
+
+```bash
+./run-tests.sh | tee artifacts/test.log
+./run-tests.sh 2>&1 | tee -a artifacts/test.log
+```
+
+**macOS:** Same commands.
+
+**Release QA use:** Keep a live view of a test run while saving the output as
+evidence.
+
+**Watch out:** `tee` writes as your user; check that the directory exists and
+has space before a long run.
+
+### Log triage pipeline
+
+A safe way to find the most common errors in the last 1,000 lines:
+
+```bash
+tail -n 1000 /var/log/myapp/app.log \
+  | grep -i error \
+  | sort \
+  | uniq -c \
+  | sort -nr \
+  | head -n 20
+```
+
+`tail` takes the recent window, `grep` keeps error lines, `sort` groups them,
+`uniq -c` counts each group, the second `sort -nr` puts the largest count
+first, and `head` shows the top 20. Every stage is a command in this part.
