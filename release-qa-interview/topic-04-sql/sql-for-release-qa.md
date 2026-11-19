@@ -1953,10 +1953,11 @@ WHERE rating > (
 (5). The subquery returns one value, 3.8: the five non-null ratings sum to 19,
 and the average is 19 / 5. The two `NULL` ratings are excluded from the
 average, and they also fail the outer comparison because `NULL > 3.8` is
-UNKNOWN rather than TRUE (Part 3). The cast matters in SQL Server: `AVG` over
-an `INT` column returns an `INT`, so without it the subquery returns 3. The
-sample happens to select the same three rows at 3, but other data would not.
-The statement is standard SQL as well.
+UNKNOWN rather than TRUE (Part 3). The cast still matters: `AVG` over an
+`INT` column returns an `INT` in SQL Server, so without it the subquery
+reports 3 rather than 3.8, and comparisons such as `>=` can change; for this
+`>` test on integer ratings the same rows pass either way. The statement is
+standard SQL as well.
 
 A scalar subquery can also supply a value to every output row:
 
@@ -2057,10 +2058,10 @@ WHERE deck_id NOT IN (
 );
 ```
 
-It is safe only because `cards.deck_id` is `NOT NULL`. If the subquery column
-could be `NULL`, the `NOT IN` version would return zero rows (Part 3), and a
-zero-row "no empty decks" result would be a false clean result. Both
-statements are standard SQL.
+It is safe only because `cards.deck_id` is `NOT NULL`, so the subquery cannot
+return a `NULL`. If the subquery returns a `NULL`, the `NOT IN` version
+returns zero rows (Part 3), and a zero-row "no empty decks" result would be a
+false clean result. Both statements are standard SQL.
 
 ### Correlated Subqueries
 
@@ -2281,7 +2282,7 @@ name instead.
 - A scalar subquery must return one column and at most one row. More rows
   raise an error; zero rows produce `NULL`, which can silently turn a
   comparison into UNKNOWN.
-- `NOT IN` over a subquery column that can be `NULL` returns no rows. Use
+- A `NOT IN` subquery whose result contains a `NULL` returns no rows. Use
   `NOT EXISTS`, or filter the inner column with `IS NOT NULL`.
 - `EXISTS` ignores the select list; `SELECT 1` states the intent. A correlated
   subquery can be slow when it runs per outer row, so compare it with a join
@@ -2527,12 +2528,11 @@ cards, then the deck. Each child table points at its parent with a foreign
 key, so deleting a parent first is rejected while matching children remain.
 The statement is standard SQL as well.
 
-The same shape has a `NULL` trap when the subquery column is nullable. A
-`DELETE ... WHERE card_id NOT IN (SELECT ...)` over a nullable column deletes
-zero rows, because `NOT IN` is UNKNOWN for every row. If the check is a
-cleanup that depends on `NOT IN`, a zero-row result can look like success
-while the rows remain. Use `NOT EXISTS` or make the subquery return no `NULL`
-values.
+The same shape has a `NULL` trap when the subquery returns a `NULL`: the
+predicate is UNKNOWN for every outer row, so the delete removes zero rows. If
+the check is a cleanup that depends on `NOT IN`, a zero-row result can look
+like success while the rows remain. Use `NOT EXISTS` or make the subquery
+return no `NULL` values.
 
 ### Transactions
 
@@ -2790,9 +2790,9 @@ of a transaction.
 - The affected-row count is evidence. `(0 rows affected)` often means the
   `WHERE` matched nothing through a wrong key, a `NULL`, or a type mismatch;
   an unexpectedly large count means the `WHERE` was too broad.
-- `DELETE` with `NOT IN` over a nullable subquery deletes nothing. Use
-  `NOT EXISTS` or filter the inner column; a zero-row delete is not proof the
-  data was clean.
+- `DELETE` with `NOT IN` over a subquery that returns a `NULL` deletes
+  nothing. Use `NOT EXISTS` or filter the inner column; a zero-row delete is
+  not proof the data was clean.
 - Delete children before parents. A foreign key rejects a parent delete while
   matching children remain, and the error text names the relationship.
 - A transaction stays open until `COMMIT` or `ROLLBACK`. An open transaction
