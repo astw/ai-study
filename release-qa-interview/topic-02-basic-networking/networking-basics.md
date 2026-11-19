@@ -126,3 +126,75 @@ A link can have high bandwidth and still feel slow: a 1 Gbps link with 200 ms
 RTT has a lot of capacity but a long wait per round trip. That is why "the
 network is slow" should become a measurement: which metric, on which path, at
 what time, and for which users?
+
+## Part 2 — Topologies and Devices
+
+### Physical vs logical topology
+
+The **physical topology** is how devices and cables are arranged in a space:
+which switch sits in which closet, which access point covers which floor. The
+**logical topology** is how traffic actually flows: which subnets and VLANs
+exist, where routing happens, and which paths are permitted by firewalls.
+
+The two can differ. A modern office is usually a physical star, with every
+device connected to a switch, but its logical topology may be several VLANs and
+subnets joined by a router. When troubleshooting, ask both questions: where is
+the device plugged in, and what path should its traffic take?
+
+### Topologies
+
+| Topology | One-line diagram | Strength | Failure mode |
+|---|---|---|---|
+| Bus | `node—node—node` on one backbone | Cheap and simple | A backbone break or heavy collisions take down the segment |
+| Star | `node—switch—node` | Easy fault isolation; one link per device | The central switch is a single point of failure |
+| Ring | `node→node→node→back` | Predictable path; dual rings can survive one break | A single break disrupts a simple ring |
+| Full mesh | `every node ↔ every node` | Maximum redundancy | Expensive: n(n−1)/2 links |
+| Partial mesh | `some nodes ↔ several nodes` | Redundancy where it matters | Design and troubleshooting complexity |
+| Tree | `root → switches → leaves` | Scales as a hierarchy | Upper links and the root are single points of failure |
+| Hybrid | `mix of star, mesh, and ring` | Fits real sites and legacy equipment | Harder to reason about and test |
+
+Most enterprise LANs are **star or tree** at the access layer and **partial
+mesh** in the core or WAN. Full mesh is reserved for small, critical groups
+where the link cost is justified.
+
+### Devices
+
+| Device | Main layer | Job | QA note |
+|---|---|---|---|
+| Hub | 1 | Repeats incoming bits to every port | One collision domain; obsolete |
+| Switch | 2 | Forwards frames by MAC address, learns a MAC table | Each port is its own collision domain; VLANs live here |
+| Router | 3 | Forwards packets between IP networks | The default gateway; often does NAT |
+| Access point | 2 | Bridges Wi-Fi clients onto the wired LAN | Coverage, roaming, and SSID issues look like "network" bugs |
+| Modem | 1–2 | Converts the provider's signal to Ethernet | A link down here takes the whole site offline |
+| Firewall | 3–4, sometimes 7 | Filters traffic by rules and connection state | A blocked port looks like a timeout, not a refusal |
+| Proxy | 7 | Forwards requests on behalf of clients | Caching and filtering can change what the app sees |
+| Load balancer | 4 or 7 | Distributes traffic across servers with health checks | Sessions may stick to one server; a bad node causes intermittent errors |
+
+Devices can work at more than one layer; the table gives the layer each mainly
+uses. For interviews, know the primary job and one failure symptom for each.
+
+### Collision domains vs broadcast domains
+
+A **collision domain** is the set of devices that can collide when they transmit
+at the same time. Hubs extend one collision domain to every port; switches
+break it into one domain per port, and full-duplex switch ports do not collide at
+all.
+
+A **broadcast domain** is the set of devices that receive a broadcast frame.
+Switches forward broadcasts to every port in the same VLAN, so they extend the
+broadcast domain; routers do not forward broadcasts, so they break it.
+
+A **VLAN** is a logical switch partition that creates a separate broadcast
+domain. Two devices in different VLANs cannot reach each other without routing
+and, usually, a firewall rule. That is a common cause of "the server is up but
+the test environment cannot reach it."
+
+### What this means for QA
+
+- Topology decides the blast radius: one access switch, one VLAN, or the whole
+  site.
+- Test across subnets and VLANs, not only between devices on the same LAN.
+- A "network down" report may be one port, one VLAN, one route, or one firewall
+  rule; the diagnostic ladder in Part 5 narrows it down.
+- A diagram is a claim, not evidence. Verify the path with commands before
+  writing the bug.
