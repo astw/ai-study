@@ -24,12 +24,15 @@ not need a database to read the guide, but you do need one to practice.
 ## Dialects
 
 SQL Server (T-SQL) is the primary track. Examples appear under a
-`**SQL Server:**` label first; statements that are identical in both tracks are
-labeled `**SQL Server and standard SQL:**`. When standard SQL differs, the
-portable form follows under `**Standard SQL:**`. A statement shown under one
-dialect's label is not a promise that the other dialect accepts it, and this
-folder makes no claim about MySQL, PostgreSQL, Oracle, or any other third
-database.
+`**SQL Server:**` label first. A statement that standard SQL also accepts may
+carry the `**SQL Server and standard SQL:**` label, or be shown once under
+`**SQL Server:**` with a prose note that the standard form is the same. When
+standard SQL differs, the portable form follows under `**Standard SQL:**`.
+Where no standard form exists, the label says so: index DDL is outside the SQL
+standard, so its portable form uses `**Portable form (not standard SQL):**`.
+A statement shown under one dialect's label is not a promise that the other
+dialect accepts it, and this folder makes no claim about MySQL, PostgreSQL,
+Oracle, or any other third database.
 
 ## Study order
 
@@ -38,8 +41,8 @@ database.
 3. Take the matching part of `mcq-150.md`, choose one option, then read the
    explanation.
 4. Practice the statements in your own SQL Server database: create the schema
-   and sample rows from Part 1, and use a transaction for anything that changes
-   data.
+   from Part 1, load the exact rows from Practice data below, and use a
+   transaction for anything that changes data.
 
 The banks have 100 Q&A and 150 MCQs. The Q&A count per part ranges from 5 to 14;
 the MCQ count ranges from 8 to 21.

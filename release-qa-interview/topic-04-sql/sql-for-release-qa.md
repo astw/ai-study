@@ -678,9 +678,9 @@ WHERE (card_id = 1001 OR card_id = 1002)
 
 This returns review 10001 only. The same query is standard SQL.
 
-`NOT` inverts a condition, but it follows the three-valued rules from the
-next section: `NOT UNKNOWN` is UNKNOWN, so a negated predicate still drops
-rows whose column is `NULL`.
+`NOT` inverts a condition, but it follows the three-valued rules in the
+`NULL` and Three-Valued Logic section below: `NOT UNKNOWN` is UNKNOWN, so a
+negated predicate still drops rows whose column is `NULL`.
 
 **SQL Server:**
 
@@ -1193,8 +1193,9 @@ GROUP BY deck_id;
 ```
 
 `front` differs between cards in the same deck, so the database cannot return
-one value for the group. Add the column to `GROUP BY`, which is what makes
-the deck/rating example work, or aggregate it.
+one value for the group. Add the column to `GROUP BY`, as the
+`GROUP BY user_id, rating` example above does with its second column, or
+aggregate it.
 
 ### HAVING
 
@@ -1653,9 +1654,12 @@ ORDER BY u.user_id, d.deck_id, c.card_id, r.review_id;
 
 The statement is standard SQL as well.
 
-**Expected rows.** Seven rows, one per review: five for user 1 (deck 101 has
-cards 1001 and 1002 with four reviews between them, and deck 102 has card
-1003 with one) and two for user 2 (deck 103 has card 1004 with two reviews).
+**Expected rows.** The select list's `u.user_id` is the deck owner, reached
+through `decks.user_id`, not the author stored in `reviews.user_id`: review
+10006 sits in user 1's deck 101 but was written by user 3. Seven rows, one per
+review: five for user 1 (deck 101 has cards 1001 and 1002 with four reviews
+between them, and deck 102 has card 1003 with one) and two for user 2 (deck
+103 has card 1004 with two reviews).
 The chain drops every parent with no child anywhere below it: users 4 and 5
 have no decks; user 3 owns deck 104, which has no cards; and card 1005 has
 no reviews. The finest table, `reviews`, sets the row count.
@@ -1866,7 +1870,7 @@ The rules that decide whether a `UNION` runs at all:
   `COUNT(*)` counts combinations. Use `COUNT(DISTINCT key)` when one query
   must answer, or pre-aggregate each child to one row per parent and join
   the summaries. Deck 101, with two cards and four reviews, makes the
-  difference permanent in this sample.
+  difference visible in this sample.
 - Walk the foreign keys when you chain. users → decks → cards → reviews
   returns seven rows for the seven reviews; more rows mean a key is not
   unique or a table was joined twice. Check the count against the finest
@@ -2542,7 +2546,8 @@ every change back to the start of the transaction, or back to a savepoint
 (below). If the connection closes or the server fails mid-transaction, the
 unfinished transaction rolls back. That all-or-nothing rule is why a test
 setup can be discarded as one unit. A transaction belongs to one connection,
-so another session cannot join it or see its uncommitted rows.
+so another session cannot join it, and under the default isolation level it
+cannot see the transaction's uncommitted rows.
 
 SQL Server first. `BEGIN TRANSACTION` starts a transaction, and `UPDATE`,
 `DELETE`, and `INSERT` after it belong to that transaction until `COMMIT` or
@@ -2566,9 +2571,10 @@ ROLLBACK TRANSACTION;
 
 **Expected effect.** The `SELECT` inside the transaction shows review 10002
 with rating 5, because a transaction sees its own changes. The `ROLLBACK`
-then undoes the update, and review 10002 holds rating 4 again. Other sessions
-do not see the uncommitted 5, and the open transaction can hold locks that
-block them, so keep transactions short and always close them.
+then undoes the update, and review 10002 holds rating 4 again. Under the
+default isolation level, other sessions do not see the uncommitted 5, and the
+open transaction can hold locks that block them, so keep transactions short
+and always close them.
 
 To keep the change instead, commit it:
 
@@ -3034,7 +3040,9 @@ GROUP BY d.deck_id, d.title;
 A `CREATE OR REPLACE VIEW` form exists in some products but is not standard
 SQL. In SQL Server, `CREATE VIEW` and `CREATE OR ALTER VIEW` must be the only
 statement in their batch, so a script creates the view first and queries it in
-a later batch.
+a later batch. Removing a view takes `DROP VIEW v_deck_card_counts;` in SQL
+Server and in standard SQL; it deletes the definition only and leaves every
+base-table row in place.
 
 The view returns one row per deck with the deck's ID, its title, and its
 number of cards. It starts from `decks` and uses `LEFT JOIN`, so a deck with
@@ -3081,7 +3089,7 @@ ORDER BY d.deck_id;
 The view's body and this query differ only by the `ORDER BY`; the result is
 identical row for row. In SQL Server, querying the view is logically the same
 as pasting its definition into the query, and the optimizer is free to combine
-the two. That leads to three facts every QA engineer should hold:
+the two. That leads to four facts every QA engineer should hold:
 
 - **A view stores no rows.** It stores a definition and a column list. When
   deck 104 gains a card, the next query of the view reports 1 without any
@@ -3099,6 +3107,11 @@ the two. That leads to three facts every QA engineer should hold:
   show what the inner one did. When a release check disagrees with the screen,
   read every view in the chain before blaming the base table; a filter added
   to a lower view changes every report above it.
+- **View permissions can differ from base-table permissions.** A view can be
+  a narrower doorway than its tables: a login may query the view without
+  direct access to the base tables, or lose the view while keeping the table
+  grant. Test a permission change by querying the view as the restricted
+  login, not only as its owner.
 
 One more SQL Server behavior: `SELECT *` inside a view is expanded when the
 view is created, and the view stores that column list. A column added to the
@@ -3133,15 +3146,17 @@ CREATE NONCLUSTERED INDEX ix_cards_deck_id
     ON cards (deck_id);
 ```
 
-**Standard SQL:**
+**Portable form (not standard SQL):**
 
 ```sql
 CREATE INDEX ix_cards_deck_id
     ON cards (deck_id);
 ```
 
-Indexes are outside the SQL standard; this portable form is supported by most
-products, but index DDL is not standardized.
+Indexes are outside the SQL standard, so the second fence is labeled portable
+rather than standard. Most products accept a form close to this one, but the
+keywords and defaults are vendor-specific; check the product's documentation
+before relying on them.
 
 In SQL Server, `CREATE INDEX` without a type word creates a nonclustered
 index; the word is spelled out above to make the choice visible. The portable
@@ -3478,12 +3493,13 @@ ORDER BY card_id, review_id;
 | 10005 | 1004 | 5 | 5 |
 | 10007 | 1004 | NULL | 5 |
 
-The totals match the grouped query in Part 4: card 1001 sums to 9, card 1002
-to 2, card 1003 to 3, and card 1004 to 5. `SUM` ignores `NULL`, so the two
-unrated reviews contribute nothing: review 10003 shows the card total of 2
-even though its own rating is `NULL`, and review 10007 shows 5. The total
-repeats on every review row; the select list changed, not the row count. A
-`GROUP BY` would return four rows and lose the individual reviews.
+The per-card totals add up to the Part 4 overall rating sum of 19: card 1001
+sums to 9, card 1002 to 2, card 1003 to 3, and card 1004 to 5. `SUM` ignores
+`NULL`, so the two unrated reviews contribute nothing: review 10003 shows the
+card total of 2 even though its own rating is `NULL`, and review 10007 shows
+5. The total repeats on every review row; the select list changed, not the
+row count. A `GROUP BY` would return four rows and lose the individual
+reviews.
 
 Adding an `ORDER BY` inside `OVER` makes the sum cumulative, and the frame
 says which rows the aggregate sees:
@@ -3778,8 +3794,10 @@ for how a query was answered; the result rows are not.
 
 **Estimated and actual plans.** SQL Server can produce an estimated plan
 without running the statement, and an actual plan while it runs. The estimated
-plan shows the operators and estimated row counts; the actual plan adds actual
-row counts, the number of executions of each operator, and warnings. The
+plan shows the operators, estimated row counts, and the warnings the optimizer
+can predict without running the statement, such as an implicit conversion or a
+missing-index suggestion. The actual plan adds actual row counts, the number of
+executions of each operator, and run-time warnings such as a tempdb spill. The
 percentages beside operators are estimated costs, even in an actual plan; they
 locate expensive operators but are not measured time. An estimated plan is
 safe to capture on a production server because it does not execute; an actual
@@ -3815,6 +3833,15 @@ proposing an index.
 an implicit conversion, a tempdb spill from a sort or hash, and a join without
 a predicate. Read the tooltip and put its text in the ticket; the warning
 often names the column and the conversion that the plan could not use.
+
+**Missing-index suggestions.** A plan may add a green `Missing Index` hint that
+names a table, the equality and inequality columns it would use, and the
+included columns. Treat it as a hint, not a command: it is generated for this
+one statement and this one data set, several hints can propose overlapping or
+redundant indexes, and it does not price the write and storage cost. Copy the
+suggested definition into a scratch copy, measure the logical reads with and
+without it, and keep it only if the reads improve and the team accepts the
+write cost.
 
 **A plan is not a correctness check.** A fast query can return the wrong rows,
 and a plan can be efficient for the wrong question. Check the result against
@@ -3855,8 +3882,9 @@ SET STATISTICS TIME OFF;
 The batch above is the shape of the measurement; no database is installed
 here, and no output is claimed. Read the `STATISTICS IO` message for `cards`:
 
-- **Scan count** is how many times the table or index was opened. A nested
-  loops join can run an inner seek more than once, so a count above 1 is a
+- **Scan count** is the number of scans or seeks the plan performed against
+  the table or index, not a count of rows, pages, or table opens. A nested
+  loops join can run an inner seek once per outer row, so a count above 1 is a
   clue to read the plan.
 - **Logical reads** is the number of 8 KB pages read from the buffer cache.
   This is the comparison metric: it counts the pages the plan touched, so it
@@ -4447,8 +4475,8 @@ rows the checks below are built to find.
 | 20004 | 1002 | 2 | `NULL` |
 
 For practice, create the staging tables with the application's column types.
-They deliberately have no foreign keys and no unique constraint on `email`, so
-the checks below have bad rows to find:
+The two staging tables have no foreign keys, and `legacy_users` has no unique
+constraint on `email`, so the checks below have bad rows to find:
 
 **SQL Server:**
 
@@ -4823,6 +4851,23 @@ or the comparison reports differences that are really environment differences.
 A set difference reports keys from one side only and cannot place the before
 and after values side by side; the full outer join reports both directions and
 the change in one row.
+
+**A plan and logical-read comparison.** A data comparison answers whether rows
+changed; a plan comparison answers whether the same query got cheaper. Take
+`SELECT card_id, front FROM cards WHERE deck_id = 103;` and capture the actual
+plan and the `STATISTICS IO` message for `cards` (the batch is in Part 10).
+Then capture both again with the wider index from Part 8
+(`ix_cards_deck_created`) in place on the table:
+
+| Capture | Operators on `cards` | What the `STATISTICS IO` line shows |
+|---|---|---|
+| With only `ix_cards_deck_id` | Index Seek, then one Key Lookup per row for `front` | Index pages plus a table page for each lookup |
+| With `ix_cards_deck_created` | One Index Seek, no Key Lookup | Index pages only; the two `Logical reads` figures are the comparison |
+
+Record both operator lists and both `Logical reads` figures with the row count
+and the cache state. On the five sample rows the optimizer may scan either
+way, so the sample does not predict production; the method — same query, same
+data, one change, two captures — is what transfers.
 
 ### Status Distributions
 
