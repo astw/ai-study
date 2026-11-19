@@ -3723,10 +3723,13 @@ difference, not formatting.
 `DATETIME`; `SYSDATETIME()` returns a `DATETIME2` with more fractional-second
 precision. Both return the server's local clock, not the client's.
 `CURRENT_TIMESTAMP` is standard and, in SQL Server, is equivalent to
-`GETDATE()`. Capture the time once into a variable, or compare against a known
-literal; a query that reads the clock once per row can produce rows on both
-sides of a boundary. For UTC, Part 8 used `SYSUTCDATETIME()`; check the target
-product's own UTC function before translating that call.
+`GETDATE()`. SQL Server evaluates `GETDATE()` and `SYSDATETIME()` once per
+statement, so every row of one statement sees the same value; the risk is
+across separate statements, where the clock moves. When a check makes several
+statements that must agree on a boundary, capture the time into a variable and
+compare every statement against it, or compare against a known literal. For
+UTC, Part 8 used `SYSUTCDATETIME()`; check the target product's own UTC
+function before translating that call.
 
 **`IDENTITY` and explicit IDs.** `IDENTITY(1,1)` makes SQL Server generate the
 next value on an insert. The standard spellings are `GENERATED ALWAYS AS
@@ -4117,8 +4120,13 @@ plan (Index Scan versus Index Seek) and logical reads for `reviews`. The
 result is reviews 10005, 10006, and 10007. The rule is the leftmost prefix: an
 index can seek on a prefix of its keys, starting with the first.
 
-**Key lookup and covering.** A nonclustered index on `cards (deck_id)` lets
-this query find the two cards in deck 101, but `front` is not in the index:
+**Key lookup and covering.** This illustration assumes the narrow index
+`ix_cards_deck_id` from Part 8 and that Part 8's wider
+`ix_cards_deck_created ON cards (deck_id, created_at) INCLUDE (front, back)`
+has not been created. If the wider index exists, the query below is already
+covered, so do not add another index for it. Under the narrow-index
+assumption, the index lets the query find the two cards in deck 101, but
+`front` is not in the index:
 
 **SQL Server and standard SQL:**
 
@@ -4136,7 +4144,10 @@ number of rows the seek returned; check the logical reads for `cards`. The Key
 Lookup's cost grows with the number of rows, which is why a covering index is
 worth considering for a query that returns many rows.
 
-The covering version adds `front` to the index leaf:
+If the wider Part 8 index does not exist, replace the narrow index: drop
+`ix_cards_deck_id` with approval and create one that adds `front` to the
+leaf. Do not keep both, because the two have the same key and differ only in
+the included column:
 
 **SQL Server:**
 
@@ -4146,12 +4157,14 @@ CREATE NONCLUSTERED INDEX ix_cards_deck_front
     INCLUDE (front);
 ```
 
-The same query is now answered from the index alone: no Key Lookup, and the
-logical reads for `cards` count only the index pages. Measurement: compare the
-actual plans and the logical reads before and after, on the same data. The
-`INCLUDE` columns are stored at the leaf and cannot be used to seek or to
-order rows; they exist so the query can read their values without visiting the
-table.
+Under the narrow-index assumption, the same query is now answered from the
+index alone: no Key Lookup, and the logical reads for `cards` count only the
+index pages. Part 8's wider `ix_cards_deck_created` covers this query too, and
+it covers `SELECT *` on `cards`; if it exists, use it and add nothing.
+Measurement: compare the actual plans and the logical reads before and after,
+on the same data. The `INCLUDE` columns are stored at the leaf and cannot be
+used to seek or to order rows; they exist so the query can read their values
+without visiting the table.
 
 **Write cost.** Every index is maintained by every `INSERT`, `UPDATE`, and
 `DELETE` on the table. The covering index above stores the `front` text for
@@ -4169,14 +4182,20 @@ habits still need the same measurement as the rest of the part.
 
 **Avoid `SELECT *`.** Name the columns the check needs. A result whose column
 list is fixed is stable when a release adds a column, and a query that names
-its columns can be covered by an index. With the covering index
+its columns can be covered by a narrower index. With the narrow
 `ix_cards_deck_front` from the previous section, `SELECT card_id, front FROM
 cards WHERE deck_id = 101` is covered: `card_id` is the clustered key,
 `deck_id` is the key, and `front` is included. `SELECT *` also reads `back`
-and `created_at`, so the plan needs a Key Lookup (or a scan) and touches more
-pages. Measurement: the actual plan (Key Lookup present or absent) and the
-logical reads for `cards`. On five cards the optimizer may scan either way;
-the difference is the columns and the lookup count at volume.
+and `created_at`, so the narrow index cannot cover it; the plan needs a Key
+Lookup (or a scan) and touches more pages. Part 8's wider
+`ix_cards_deck_created` is the exception on this table: it includes `front`
+and `back` and carries `created_at` and `card_id`, so it can cover `SELECT *`
+on `cards`; that is a property of a wide index, not a benefit of `SELECT *`.
+The rule is about the query and the index together: `SELECT *` prevents a
+narrow covering index, and an index containing every selected column can
+still cover it. Measurement: the actual plan (Key Lookup present or absent)
+and the logical reads for `cards`. On five cards the optimizer may scan either
+way; the difference is the columns and the lookup count at volume.
 
 **Use `UNION ALL` unless deduplication is required.** `UNION` removes
 duplicate rows from the combined result; `UNION ALL` keeps every row and
@@ -4386,9 +4405,10 @@ needs its own measurement.
 - `WITH (NOLOCK)` can return uncommitted, duplicated, or missing rows; it is a
   correctness risk, not a tuning fix. It can also still be blocked by a schema
   change.
-- `SELECT *` prevents a covering index and changes the result when the schema
-  changes. `UNION` deduplicates while `UNION ALL` does not, and `NOT IN` over
-  a nullable column can return no rows.
+- `SELECT *` prevents a narrow covering index; an index containing every
+  selected column can still cover it, at a write cost. It also changes the
+  result when the schema changes. `UNION` deduplicates while `UNION ALL` does
+  not, and `NOT IN` over a nullable column can return no rows.
 - Every index adds write work and storage; a wide `INCLUDE` duplicates data.
   Covering is a property of one query, not of the index.
 - A function, a cast, or a type mismatch on the indexed column prevents a
