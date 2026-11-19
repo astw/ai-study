@@ -1440,3 +1440,307 @@ absolute path or an explicit `PATH` update over relying on the ambient order.
 This sends both standard output and standard error to the log, then prints the
 exit status. `0` means the script succeeded; a non-zero value means it failed,
 and the log holds the evidence.
+
+## Part 8 — SSH and File Transfer
+
+SSH is the standard remote shell. These commands assume you are authorized to
+access the host; never test or copy files from a system you do not own or have
+permission to use.
+
+### SSH config
+
+`~/.ssh/config` lets you name a host once and reuse it:
+
+```text
+Host staging
+    HostName staging.example.com
+    User qa
+    IdentityFile ~/.ssh/id_ed25519
+    Port 22
+```
+
+Then `ssh staging` uses the alias. Keep the file and your private keys at mode
+`600`, and never commit them to a repository.
+
+### `ssh`
+
+**Day-to-day.** Connect to a remote host or run one command there.
+
+| Flag | What it does |
+|---|---|
+| `-p 2222` | Use a non-default port |
+| `-i ~/.ssh/key` | Use a specific private key |
+| `-v` | Show the connection negotiation |
+
+**Linux:**
+
+```bash
+ssh qa@staging.example.com
+ssh -p 2222 qa@staging.example.com
+ssh staging 'tail -n 20 /var/log/myapp/app.log'
+```
+
+**macOS:** Same commands; the built-in client behaves the same.
+
+**Release QA use:** Log into a test host, run one remote command, or check a
+service log without starting an interactive session.
+
+**Watch out:** A host-key warning on first connect needs a deliberate check; a
+`Permission denied (publickey)` is an authentication problem, and `-v` shows
+which key was offered.
+
+### `ssh-keygen`
+
+**Frequent.** Create an SSH key pair.
+
+| Flag | What it does |
+|---|---|
+| `-t ed25519` | Choose the key type |
+| `-C 'comment'` | Add a label |
+| `-f path` | Choose the key file |
+
+**Linux:**
+
+```bash
+ssh-keygen -t ed25519 -C 'qa@example.com'
+ssh-keygen -t ed25519 -f ~/.ssh/qa_ed25519 -C 'qa'
+```
+
+**macOS:** Same commands.
+
+**Release QA use:** Set up key-based login for test and staging hosts; install
+the public key with `ssh-copy-id` when the host supports it.
+
+**Watch out:** The private key must stay private and at mode `600`; never paste
+it into a ticket or commit it.
+
+### `scp`
+
+**Frequent.** Copy files over SSH.
+
+| Flag | What it does |
+|---|---|
+| `-r` | Copy directories recursively |
+| `-P 2222` | Use a non-default port (uppercase) |
+| `-p` | Preserve timestamps (lowercase) |
+
+**Linux:**
+
+```bash
+scp artifacts/app.zip qa@staging:/tmp/
+scp -r logs qa@staging:/tmp/logs
+scp -P 2222 app.zip qa@staging:/tmp/
+```
+
+**macOS:** Same commands; the port flag is uppercase `-P`.
+
+**Release QA use:** Copy an artifact to a test host or pull a log back for a
+bug report.
+
+**Watch out:** `-P` is the port and `-p` preserves timestamps; for large or
+resumable transfers, use `rsync`.
+
+### `sftp`
+
+**Situational.** Interactive file transfer over SSH.
+
+| Command | What it does |
+|---|---|
+| `put file` | Upload a file |
+| `get file` | Download a file |
+| `ls` | List the remote directory |
+| `bye` | Exit |
+
+**Linux:**
+
+```bash
+sftp qa@staging
+put artifacts/app.zip
+get /var/log/myapp/app.log
+bye
+```
+
+**macOS:** Same commands.
+
+**Release QA use:** Browse and copy a few files on a remote host when a
+one-line `scp` is awkward.
+
+**Watch out:** SFTP is not FTPS; it runs over SSH on port 22.
+
+### `rsync`
+
+**Day-to-day.** Synchronize files and directories efficiently.
+
+| Flag | What it does |
+|---|---|
+| `-a` | Archive mode: preserve permissions and times |
+| `-v` | Show what is transferred |
+| `-z` | Compress during transfer |
+| `-n` | Dry run; show what would change |
+
+**Linux:**
+
+```bash
+rsync -avz releases/2026-11-18/ qa@staging:/opt/app/releases/2026-11-18/
+rsync -avn releases/2026-11-18/ qa@staging:/opt/app/releases/2026-11-18/
+```
+
+**macOS:** Same commands; the built-in `rsync` may be older, and Homebrew can
+install a newer version.
+
+**Release QA use:** Sync a build directory to a test host, using `-n` first to
+see what would change.
+
+**Watch out:** A trailing slash on the source means "copy the contents"; without
+it, the directory itself is copied. `--delete` removes destination files that
+are missing from the source.
+
+### SSH failures
+
+- **Host key verification failed** — the host key changed or is unknown. Check
+  the fingerprint through a trusted channel before editing `known_hosts`.
+- **Permission denied (publickey)** — the server did not accept your key. Check
+  the key path, file permissions, and `ssh-add -l`.
+- **Connection timed out** — the network or a firewall is blocking the port.
+- **Connection refused** — the host is reachable but `sshd` is not listening on
+  that port.
+- **Wrong user or port** — check `~/.ssh/config`, the `-p` flag, and the
+  server's SSH configuration.
+
+## Part 9 — curl and Network Checks
+
+These commands check the path and the HTTP layer from the shell. Topic 2
+explains the layers and failure modes; this part focuses on the commands.
+
+### `curl`
+
+**Day-to-day.** Make HTTP requests from the command line.
+
+| Flag | What it does |
+|---|---|
+| `-I` | Fetch headers only |
+| `-v` | Show the full request and response |
+| `-X METHOD` | Choose the HTTP method |
+| `-H 'Header: value'` | Add a request header |
+| `-d 'data'` | Send a request body |
+| `--max-time 10` | Set a timeout |
+| `--retry 2` | Retry a failed request |
+| `-o file` | Write the body to a file |
+
+**Linux:**
+
+```bash
+curl -I https://example.com
+curl -v https://example.com
+curl -X POST -H 'Content-Type: application/json' \
+  -d '{"status":"ok"}' https://example.com/api
+curl --max-time 10 --retry 2 -o artifacts/page.html https://example.com
+```
+
+**macOS:** Same commands.
+
+**Release QA use:** Smoke check an endpoint, inspect status and headers,
+reproduce an API request, and confirm a TLS certificate.
+
+**Watch out:** `-k` disables certificate verification; do not use it to hide a
+real TLS problem.
+
+### `ping`
+
+**Day-to-day.** Send ICMP echo requests and measure replies.
+
+| Flag | What it does |
+|---|---|
+| `-c 4` | Send four requests and stop |
+
+**Linux:**
+
+```bash
+ping -c 4 example.com
+```
+
+**macOS:** Same command; `-c` works the same.
+
+**Release QA use:** Check basic reachability and latency before testing a
+service.
+
+**Watch out:** A blocked ICMP does not prove the host or service is down; test
+the actual port.
+
+### `dig`
+
+**Frequent.** Query DNS records.
+
+| Flag | What it does |
+|---|---|
+| `+short` | Print only the answer |
+| `@resolver` | Query a specific resolver |
+| `A`, `AAAA`, `MX` | Choose the record type |
+
+**Linux:**
+
+```bash
+dig example.com
+dig +short example.com
+dig @8.8.8.8 example.com A
+```
+
+**macOS:** Same commands.
+
+**Release QA use:** Check a record, its TTL, and whether two resolvers return
+different answers.
+
+**Watch out:** Caching and split-horizon DNS can make the answer depend on the
+resolver and the network you are on.
+
+### `ss`
+
+**Frequent.** Show sockets and listening ports (Linux only).
+
+| Flag | What it does |
+|---|---|
+| `-t` | TCP sockets |
+| `-u` | UDP sockets |
+| `-l` | Listening sockets |
+| `-p` | Show the process |
+| `-n` | Do not resolve names |
+
+**Linux:**
+
+```bash
+ss -tulpn
+ss -tn state established
+```
+
+**macOS:** `ss` is not available; use `netstat -an` or `lsof -i`.
+
+**Release QA use:** Confirm that a service is listening on the expected port
+and find the process behind it.
+
+**Watch out:** `-p` needs privileges to see other users' processes, and minimal
+containers may not include `ss`.
+
+### `nc`
+
+**Situational.** Netcat for simple TCP or UDP connections.
+
+| Flag | What it does |
+|---|---|
+| `-v` | Verbose |
+| `-z` | Scan without sending data |
+| `-l` | Listen mode |
+
+**Linux:**
+
+```bash
+nc -vz example.com 443
+nc -l 8080
+```
+
+**macOS:** Basic use is the same; the BSD version may differ on `-l`.
+
+**Release QA use:** Test whether a TCP port is reachable or start a simple
+listener for a local check.
+
+**Watch out:** Netcat variants differ; `-z` may not exist on every version, and
+`curl` or `ss` may be the better tool.
