@@ -65,9 +65,10 @@ uses the layer below it.
 | 2 | Data Link | Local delivery on one link, MAC addresses | Ethernet, Wi-Fi, ARP |
 | 1 | Physical | Bits on a wire or through the air | Cables, pins, radio |
 
-A memory aid for layers 7 down to 1 is **Please Do Not Throw Sausage Pizza
+A memory aid for layers 1 through 7 is **Please Do Not Throw Sausage Pizza
 Away** (Physical, Data Link, Network, Transport, Session, Presentation,
-Application is the reverse order). Use whichever direction you find easier.
+Application). For layers 7 down to 1, reverse it or use **All People Seem To
+Need Data Processing**.
 
 The model is a map, not a law. Real protocols blur layers: TLS sits between
 transport and application, and ARP is often described as crossing layers 2 and
