@@ -2910,10 +2910,10 @@ can scan `reviews` unless one exists.
 
 **UNIQUE.** A unique constraint rejects duplicate values in a column or in a
 combination of columns. This schema has none; `users.email` is the natural
-candidate. `legacy_users` (Part 1) holds two rows with `alice@example.com`,
-and a `UNIQUE` constraint on `email` is what turns that duplicate from a query
-finding (Part 11) into a rejected insert. The variant below is a syntax
-illustration, not the shared definition:
+candidate. The staging table `legacy_users` (introduced in Part 11) holds two
+rows with `alice@example.com`, and a `UNIQUE` constraint on `email` is what
+turns that duplicate from a query finding (Part 11) into a rejected insert.
+The variant below is a syntax illustration, not the shared definition:
 
 **SQL Server:**
 
@@ -2993,11 +2993,11 @@ The six kinds, with the places this schema uses them:
 **Adding constraints to existing data.** `ALTER TABLE ... ADD CONSTRAINT`
 changes a table that already holds rows, and the database validates those
 rows by default. Adding `UNIQUE (email)` to a table that has already received
-`legacy_users` fails on the duplicate Alice address; adding `NOT NULL` to a
-column that holds `NULL`s fails on the first such row. That is why constraint
-additions usually come after cleanup, and why the DDL step of a migration is
-part of the test: the failure is evidence about the data, not only about the
-script.
+the `legacy_users` rows from Part 11 fails on the duplicate Alice address;
+adding `NOT NULL` to a column that holds `NULL`s fails on the first such row.
+That is why constraint additions usually come after cleanup, and why the DDL
+step of a migration is part of the test: the failure is evidence about the
+data, not only about the script.
 
 ### Views
 
@@ -3140,10 +3140,13 @@ CREATE INDEX ix_cards_deck_id
     ON cards (deck_id);
 ```
 
+Indexes are outside the SQL standard; this portable form is supported by most
+products, but index DDL is not standardized.
+
 In SQL Server, `CREATE INDEX` without a type word creates a nonclustered
-index; the word is spelled out above to make the choice visible. Standard SQL
-has no `CLUSTERED` or `NONCLUSTERED` keyword, so the product's default index
-type applies.
+index; the word is spelled out above to make the choice visible. The portable
+form has no `CLUSTERED` or `NONCLUSTERED` keyword, so the product's default
+index type applies.
 
 With the index, a query can seek the rows for one deck instead of scanning
 every card:
@@ -3201,10 +3204,10 @@ ORDER BY created_at;
 `ix_cards_deck_created` covers this query: `deck_id` and `created_at` are key
 columns, `front` and `back` are included, and `card_id` comes with every
 nonclustered index on this table because it is the clustered key. `INCLUDE`
-is SQL Server syntax; standard `CREATE INDEX` has no included-column clause,
-and products that support covering indexes spell it differently. Covering is
-a property of one query, not of the index: the same index may not cover the
-next query.
+is SQL Server syntax; the portable `CREATE INDEX` form has no included-column
+clause, and products that support covering indexes spell it differently.
+Covering is a property of one query, not of the index: the same index may not
+cover the next query.
 
 **Write cost.** Every index is maintained by every `INSERT`, `UPDATE`, and
 `DELETE` on the table. A new row adds an entry to each index, a change to an
@@ -3248,8 +3251,10 @@ may depend on it.
   and name the write cost. Do not create or drop an index on a shared or
   production environment without approval.
 - Check dependencies before dropping or renaming a column or table. A view or
-  index that references it can break, and SQL Server can create a view
-  against a missing object and fail only when the view is queried.
+  index that references it can break. A non-schema-bound view can outlive an
+  object it references: dropping or renaming that object can succeed, and the
+  failure appears when the view is queried. Creating a view against an object
+  that does not yet exist fails at creation.
 
 ### Watch-outs
 
