@@ -578,3 +578,710 @@ shortest standard form in this guide is `FETCH FIRST`.
   them. A length check must say which one it means.
 - `FETCH FIRST` without `ORDER BY` is allowed by some databases but still
   arbitrary. Do not treat "it returned two rows" as a deterministic result.
+
+## Part 3 — Filtering and NULL
+
+`WHERE` decides which rows a query keeps. It runs once per row, keeps the row
+only when the condition is TRUE, and runs before any grouping. That last point
+is why filters on individual rows belong in `WHERE` while filters on totals
+belong in `HAVING` (Part 4).
+
+### WHERE
+
+The simplest filter compares one column to one literal.
+
+**SQL Server:**
+
+```sql
+SELECT card_id, deck_id, front
+FROM cards
+WHERE deck_id = 101;
+```
+
+This returns cards 1001 and 1002, the two rows whose `deck_id` is 101. The
+statement is standard SQL as well.
+
+The comparison operators are `=`, `<>`, `!=`, `<`, `<=`, `>`, and `>=`.
+Standard SQL uses `<>` for "not equal"; SQL Server accepts both `<>` and
+`!=`. Numbers are written bare and text is single-quoted.
+
+**SQL Server:**
+
+```sql
+SELECT review_id, rating, reviewed_at
+FROM reviews
+WHERE rating > 3;
+```
+
+This returns reviews 10001 (5), 10002 (4), and 10005 (5). Reviews 10003 and
+10007 have a `NULL` rating; the comparison is UNKNOWN for them, and `WHERE`
+drops UNKNOWN rows. The rules behind that behavior appear in "NULL and
+Three-Valued Logic" below.
+
+The date form of the filter is the same in both dialects, but the literal
+syntax differs:
+
+**SQL Server:**
+
+```sql
+SELECT review_id, reviewed_at
+FROM reviews
+WHERE reviewed_at >= '2026-01-22';
+```
+
+**Standard SQL:**
+
+```sql
+SELECT review_id, reviewed_at
+FROM reviews
+WHERE reviewed_at >= TIMESTAMP '2026-01-22 00:00:00';
+```
+
+Both return the five reviews recorded on or after 2026-01-22, from 10003 to
+10007. SQL Server converts the quoted string to a date/time value when it
+compares it to a `DATETIME2` column; standard SQL has a typed timestamp
+literal.
+
+`WHERE` runs before the `SELECT` list is computed, so it cannot see a column
+alias from `SELECT` (Part 2). Repeat the expression when the filter needs it.
+
+### AND, OR, and NOT
+
+`NOT` binds tighter than `AND`, and `AND` binds tighter than `OR`. The
+precedence is fixed by the language, not by the order in which you typed the
+clauses. Parentheses are how you state the grouping you mean.
+
+The wrong version:
+
+**SQL Server:**
+
+```sql
+SELECT review_id, card_id, rating
+FROM reviews
+WHERE card_id = 1001 OR card_id = 1002 AND rating = 5;
+```
+
+`AND` is evaluated first, so this means "card 1001, or card 1002 with rating
+5". It returns reviews 10001 (5) and 10002 (4): the rating-4 review survives
+because the first branch never mentions `rating`.
+
+The corrected version adds parentheses:
+
+**SQL Server:**
+
+```sql
+SELECT review_id, card_id, rating
+FROM reviews
+WHERE (card_id = 1001 OR card_id = 1002)
+  AND rating = 5;
+```
+
+This returns review 10001 only. The same query is standard SQL.
+
+`NOT` inverts a condition, but it follows the three-valued rules from the
+next section: `NOT UNKNOWN` is UNKNOWN, so a negated predicate still drops
+rows whose column is `NULL`.
+
+**SQL Server:**
+
+```sql
+SELECT review_id, rating
+FROM reviews
+WHERE rating <> 5;
+```
+
+This returns reviews 10002 (4), 10004 (3), and 10006 (2). It does not return
+reviews 10003 and 10007, whose rating is `NULL`, even though they are "not
+5". To include them, say so explicitly:
+
+**SQL Server:**
+
+```sql
+SELECT review_id, rating
+FROM reviews
+WHERE rating <> 5
+   OR rating IS NULL;
+```
+
+This returns five rows. Whether the unknown rows belong in the answer is a
+product question; the query should state its choice either way.
+
+### IN, BETWEEN, and LIKE
+
+`IN` tests a column against a list and is shorthand for a chain of `OR`
+equalities.
+
+**SQL Server:**
+
+```sql
+SELECT review_id, card_id, user_id, rating
+FROM reviews
+WHERE card_id IN (1001, 1004);
+```
+
+This returns reviews 10001, 10002, 10005, and 10007. The statement is
+standard SQL. `IN` uses the same equality rules as `=`, so the `NULL` trap in
+"The NOT IN Trap" applies to its negated form.
+
+`BETWEEN` tests an inclusive range: `rating BETWEEN 2 AND 4` means
+`rating >= 2 AND rating <= 4`.
+
+**SQL Server:**
+
+```sql
+SELECT review_id, rating
+FROM reviews
+WHERE rating BETWEEN 2 AND 4;
+```
+
+This returns reviews 10002 (4), 10004 (3), and 10006 (2): both endpoints are
+included, and the two `NULL` ratings are excluded. The statement is standard
+SQL.
+
+The inclusive upper bound is a trap for date and time columns. This filter
+looks like "the last five days" but loses rows recorded later on the final
+day:
+
+**SQL Server:**
+
+```sql
+SELECT review_id, reviewed_at
+FROM reviews
+WHERE reviewed_at >= '2026-01-20'
+  AND reviewed_at <  '2026-01-25';
+```
+
+This half-open range returns reviews 10001 through 10005. Review 10006,
+recorded at 2026-01-25 14:00:00, is excluded because it is not before
+2026-01-25 00:00:00; a `BETWEEN ... AND '2026-01-25'` version would exclude
+it too, because the bare date means midnight. The half-open form makes the
+intended boundary explicit. The standard form uses `TIMESTAMP` literals but
+keeps the same comparison shape.
+
+`LIKE` matches text against a pattern. `%` stands for any run of zero or more
+characters, and `_` stands for exactly one character.
+
+**SQL Server:**
+
+```sql
+SELECT card_id, front
+FROM cards
+WHERE front LIKE 'What is%';
+```
+
+Every card front starts with "What is", so this returns all five cards. The
+statement is standard SQL.
+
+**SQL Server:**
+
+```sql
+SELECT user_id, email
+FROM users
+WHERE email LIKE '____@example.com';
+```
+
+Each `_` matches one character, so this returns `dave@example.com` and
+`erin@example.com`: the two addresses with four characters before the `@`.
+A pattern that starts with `%` can match anywhere in the string, which is
+useful for discovery and expensive on a large table (Part 10).
+
+To match a literal `%` or `_`, declare an escape character with `ESCAPE`.
+Whether matching is case-sensitive depends on the column's collation; SQL
+Server's common default collations are case-insensitive, but a case-sensitive
+database or column changes the result. SQL Server also supports bracket
+patterns such as `[A-C]`; standard SQL does not, so keep those out of portable
+checks.
+
+### NULL and Three-Valued Logic
+
+SQL conditions have three possible outcomes, not two: TRUE, FALSE, and
+UNKNOWN. `WHERE` keeps a row only when its condition is TRUE, so both FALSE
+and UNKNOWN remove the row. A comparison involving `NULL` is UNKNOWN, because
+`NULL` means "no value" and the database cannot decide whether an absent
+value equals anything.
+
+| `A` | `B` | `A AND B` | `A OR B` |
+|---|---|---|---|
+| TRUE | TRUE | TRUE | TRUE |
+| TRUE | FALSE | FALSE | TRUE |
+| TRUE | UNKNOWN | UNKNOWN | TRUE |
+| FALSE | FALSE | FALSE | FALSE |
+| FALSE | UNKNOWN | FALSE | UNKNOWN |
+| UNKNOWN | UNKNOWN | UNKNOWN | UNKNOWN |
+
+`NOT` follows the same rule: `NOT TRUE` is FALSE, `NOT FALSE` is TRUE, and
+`NOT UNKNOWN` is UNKNOWN. The practical effect is that `NULL` behaves like a
+third truth value that spreads through most expressions.
+
+**SQL Server:**
+
+```sql
+SELECT user_id, display_name
+FROM users
+WHERE display_name = NULL;
+```
+
+This returns no rows, not even user 3. `= NULL` is UNKNOWN for every row,
+because `NULL = NULL` is UNKNOWN as well. The test for a missing value is
+`IS NULL`.
+
+**SQL Server:**
+
+```sql
+SELECT user_id, display_name
+FROM users
+WHERE display_name IS NULL;
+```
+
+This returns user 3. `IS NOT NULL` is the opposite test:
+
+**SQL Server:**
+
+```sql
+SELECT review_id, rating
+FROM reviews
+WHERE rating IS NOT NULL;
+```
+
+This returns the five reviews with a rating. `IS NULL` and `IS NOT NULL` are
+predicates, not comparisons; they always return TRUE or FALSE, never UNKNOWN.
+Both forms are standard SQL.
+
+`COALESCE` returns its first argument that is not `NULL`, which turns an
+absent value into a display value or a comparison value.
+
+**SQL Server:**
+
+```sql
+SELECT user_id,
+       COALESCE(display_name, '(no name)') AS label
+FROM users;
+```
+
+User 3 gets `(no name)`; the other rows keep their names. `COALESCE` is
+standard SQL and accepts any number of arguments. SQL Server also has the
+two-argument `ISNULL` function, which is not part of standard SQL.
+
+`NULLIF(a, b)` returns `NULL` when `a` equals `b`, and `a` otherwise. Its most
+common release-check use is guarding a division whose denominator can be
+zero.
+
+**SQL Server:**
+
+```sql
+SELECT CAST(SUM(rating) AS DECIMAL(10, 2))
+       / NULLIF(COUNT(rating), 0) AS avg_rating
+FROM reviews;
+```
+
+This returns the value 3.8. Without `NULLIF`, a query over a set with no rated
+reviews would divide by zero and fail with an error; with it, the denominator
+becomes `NULL` and the result is `NULL`. The version without the cast,
+`SUM(rating) / NULLIF(COUNT(rating), 0)`, would do integer division and
+return 3. Both `NULLIF` and the cast are standard SQL.
+
+The three-valued rules are easy to forget in negative checks, which is the
+subject of the next section.
+
+### The NOT IN Trap
+
+`NOT IN` compares a value against every item in a list. If the list contains
+a `NULL`, no row passes.
+
+**SQL Server:**
+
+```sql
+SELECT card_id
+FROM cards
+WHERE card_id NOT IN (1001, NULL);
+```
+
+This returns zero rows. `card_id NOT IN (1001, NULL)` expands to
+`card_id <> 1001 AND card_id <> NULL`. For card 1002 the first part is TRUE
+and the second is UNKNOWN, and `TRUE AND UNKNOWN` is UNKNOWN; for card 1001
+the first part is FALSE. Neither result is TRUE, so `WHERE` keeps nothing.
+
+The same trap appears when the list comes from a subquery over a nullable
+column:
+
+**SQL Server:**
+
+```sql
+SELECT review_id, rating
+FROM reviews
+WHERE rating NOT IN (
+    SELECT rating
+    FROM reviews
+    WHERE user_id = 1
+);
+```
+
+The subquery returns 5, NULL, and 3, with NULL repeated. The apparent
+question is "which reviews have a rating that user 1 never gave?", whose
+answer from the sample rows would be reviews 10002 (4) and 10006 (2). The
+query returns zero rows, because the NULL in the list makes every comparison
+UNKNOWN.
+
+There are two reliable fixes. The first removes the NULLs from the list:
+
+**SQL Server:**
+
+```sql
+SELECT review_id, rating
+FROM reviews
+WHERE rating NOT IN (
+    SELECT rating
+    FROM reviews
+    WHERE user_id = 1
+      AND rating IS NOT NULL
+);
+```
+
+This returns reviews 10002 and 10006. The outer `NULL` ratings are still
+excluded, because `NULL NOT IN (...)` is UNKNOWN; that matches the usual
+reading of "a rating user 1 never gave", which implies a rating exists.
+
+The second fix asks the question as existence rather than membership:
+
+**SQL Server:**
+
+```sql
+SELECT r.review_id, r.rating
+FROM reviews AS r
+WHERE r.rating IS NOT NULL
+  AND NOT EXISTS (
+      SELECT 1
+      FROM reviews AS u
+      WHERE u.user_id = 1
+        AND u.rating = r.rating
+  );
+```
+
+This returns the same two reviews. `NOT EXISTS` is TRUE when the inner query
+returns no row, and an inner comparison with `NULL` is UNKNOWN, which counts
+as "no match" for the outer row rather than poisoning the result.
+`NOT EXISTS` is the safer default for exclusion checks. The form is standard
+SQL; Part 6 covers the mechanics of the subquery.
+
+`NOT IN` is safe when the list is known to contain no `NULL`, such as a
+literal list of IDs or a subquery over a `NOT NULL` column. When the list
+comes from a nullable column or from a query you do not control, either add
+`IS NOT NULL` to the subquery or switch to `NOT EXISTS`.
+
+### Release QA Use
+
+- Turn each acceptance criterion into a `WHERE` predicate and count the
+  matching rows. A filter written from ticket wording ("not published", "not
+  rated") often becomes a negation, and negations drop `NULL` rows. Check
+  that explicitly.
+- Use prefix `LIKE 'term%'` when the requirement is "starts with"; a leading
+  `%` changes both the meaning and the cost of the check.
+- Write date windows as half-open ranges (`>= start AND < next_day`) so a
+  record at 23:59:59 on the last day is included and the boundary is
+  unambiguous.
+- Write exclusion checks with `NOT EXISTS` or with `NOT IN` over a NULL-free
+  subquery. A zero-row result from `NOT IN` with a nullable list is a false
+  "clean" result, not evidence that the data is clean.
+- Sanity-check every filter against the sample rows. If `rating > 3` and
+  `rating <= 3` together do not add up to `COUNT(*)`, the missing rows are
+  the `NULL` ones.
+- Use `COALESCE` for readable report labels and `NULLIF` for safe
+  denominators; keep both out of `WHERE` predicates on large tables when an
+  index should be used (Part 10).
+
+### Watch-outs
+
+- `AND` binds tighter than `OR`. Parenthesize any mixed condition; the server
+  will not guess your intent.
+- `NULL` is compared with `IS NULL` and `IS NOT NULL`, never with `=` or `<>`.
+- Negating a comparison with `<>`, `NOT IN`, `NOT LIKE`, `NOT BETWEEN`, or
+  `NOT (...)` drops `NULL` rows. Negation does not add them back.
+- `NOT IN` with a `NULL` anywhere in the list returns no rows. Use
+  `NOT EXISTS` or filter the inner column with `IS NOT NULL`.
+- `BETWEEN` includes both endpoints. On a date/time column, an inclusive
+  upper bound of a bare date excludes the rest of that day.
+- `LIKE` treats `%` and `_` as wildcards. Escape them with `ESCAPE` when they
+  are literal, and remember that case sensitivity comes from the collation.
+- `COALESCE` and `NULLIF` are standard; SQL Server's `ISNULL` is not. The two
+  names are easy to confuse with the predicate `IS NULL`.
+
+## Part 4 — Aggregating and Grouping
+
+An aggregate function collapses many rows into one value. A query with an
+aggregate and no `GROUP BY` returns a single row for the whole table; a query
+with `GROUP BY` returns one row per group. QA checks use this to count
+records, total and average values, and compare distributions before and after
+a release.
+
+### Aggregate Functions
+
+The aggregate functions in this guide are `COUNT`, `SUM`, `AVG`, `MIN`, and
+`MAX`. All of them ignore `NULL` inputs apart from `COUNT(*)`, which counts
+rows without looking at column values.
+
+**SQL Server:**
+
+```sql
+SELECT COUNT(*)                            AS review_count,
+       COUNT(rating)                       AS rated_count,
+       SUM(rating)                         AS rating_sum,
+       AVG(CAST(rating AS DECIMAL(10, 2))) AS rating_avg,
+       MIN(rating)                         AS lowest_rating,
+       MAX(rating)                         AS highest_rating
+FROM reviews;
+```
+
+This returns one row: 7 reviews, 5 of them rated, a rating sum of 19, an
+average of 3.8, a lowest rating of 2, and a highest rating of 5. The average
+is 19 / 5, not 19 / 7: the two `NULL` ratings are left out of the sum and
+the count, so the denominator is the number of rated reviews. The cast is
+needed because SQL Server's `AVG` over an `INT` column returns an `INT` and
+discards the fraction, so 19 / 5 is reported as 3.
+
+The same query is standard SQL with the same `NULL` handling. The return type
+for an integer column depends on the product and can be an integer, a decimal,
+or a floating-point value, so an explicit cast is the portable way to get a
+predictable fractional average.
+
+`MIN` and `MAX` are not limited to numbers: they work on text and on dates.
+`MIN(created_at)` and `MAX(created_at)` are a quick "first and last record"
+check on any table.
+
+A query with an aggregate and no `GROUP BY` treats the whole table as one
+group, so it always returns exactly one row, even when the filter matches
+nothing.
+
+**SQL Server:**
+
+```sql
+SELECT COUNT(*)   AS review_count,
+       SUM(rating) AS rating_sum,
+       AVG(rating) AS rating_avg,
+       MIN(rating) AS lowest,
+       MAX(rating) AS highest
+FROM reviews
+WHERE 1 = 0;
+```
+
+This returns one row containing 0, `NULL`, `NULL`, `NULL`, and `NULL`.
+`COUNT` returns 0, but the other aggregates return `NULL` because they have
+no values to work on; `SUM` over an empty or all-`NULL` set is `NULL`, not 0.
+A report that adds those columns without `COALESCE` shows a blank instead of
+zero. The statement is standard SQL.
+
+### COUNT(*) and COUNT(column)
+
+The three count forms answer three different questions:
+
+- `COUNT(*)` counts rows.
+- `COUNT(column)` counts rows where that column is not `NULL`.
+- `COUNT(DISTINCT column)` counts distinct, non-`NULL` values.
+
+**SQL Server:**
+
+```sql
+SELECT COUNT(*)                AS review_count,
+       COUNT(rating)           AS rated_count,
+       COUNT(DISTINCT card_id) AS reviewed_cards
+FROM reviews;
+```
+
+This returns 7, 5, and 4. Seven reviews exist, five carry a rating, and four
+distinct cards (1001, 1002, 1003, and 1004) were reviewed. The `NULL` ratings
+are not counted as a value.
+
+The difference between a distinct row and a distinct count is another
+release-check trap:
+
+**SQL Server:**
+
+```sql
+SELECT COUNT(*)                     AS user_count,
+       COUNT(display_name)          AS names_present,
+       COUNT(DISTINCT display_name) AS distinct_names
+FROM users;
+```
+
+This returns 5, 4, and 3. `SELECT DISTINCT display_name` (Part 2) returns four
+rows including `NULL`, but `COUNT(DISTINCT display_name)` ignores `NULL` and
+returns three. "How many different names appear in the result?" and "how many
+distinct names are stored?" are different numbers.
+
+`COUNT` never returns `NULL`: it returns 0 when there is nothing to count.
+That makes it the safest aggregate for a baseline query.
+
+The forms diverge sharply after a join, when one row on the one side matches
+many rows on the many side. This query counts cards and reviews per deck:
+
+**SQL Server:**
+
+```sql
+SELECT decks.deck_id,
+       decks.title,
+       COUNT(*)                          AS joined_rows,
+       COUNT(DISTINCT cards.card_id)     AS reviewed_cards,
+       COUNT(DISTINCT reviews.review_id) AS review_count
+FROM decks
+JOIN cards   ON cards.deck_id = decks.deck_id
+JOIN reviews ON reviews.card_id = cards.card_id
+GROUP BY decks.deck_id, decks.title
+ORDER BY decks.deck_id;
+```
+
+| deck_id | title | joined_rows | reviewed_cards | review_count |
+|---:|---|---:|---:|---:|
+| 101 | Biology 101 | 4 | 2 | 4 |
+| 102 | Spanish Verbs | 1 | 1 | 1 |
+| 103 | Biology 101 | 2 | 1 | 2 |
+
+Deck 101 has two cards, but the join produces four rows because those two
+cards have four reviews between them. `COUNT(*)` reports 4, which is the
+number of joined rows, not the number of cards.
+`COUNT(DISTINCT cards.card_id)` reports 2, the number of cards that have at
+least one review. `COUNT(DISTINCT reviews.review_id)` reports 4, the number
+of reviews. Deck 104 does not appear because it has no cards, and card 1005
+does not appear because it has no reviews; an inner join keeps only matches
+(Part 5 shows the `LEFT JOIN` form that preserves them). The join syntax here
+is a preview; the guidance that matters is that `COUNT(*)` after a
+one-to-many join counts rows, not entities.
+
+### GROUP BY
+
+`GROUP BY` divides the rows into groups that share the same values in the
+listed columns, then evaluates the aggregates once per group.
+
+**SQL Server:**
+
+```sql
+SELECT deck_id, COUNT(*) AS card_count
+FROM cards
+GROUP BY deck_id;
+```
+
+This returns three rows: deck 101 with 2 cards, deck 102 with 1, and deck 103
+with 2. Deck 104 does not appear, because `GROUP BY` groups the rows that
+exist; it does not invent an empty group. A report that must list every deck
+starts from `decks` and uses a `LEFT JOIN` (Part 5). The statement is standard
+SQL.
+
+Grouping by two columns makes one group per combination:
+
+**SQL Server:**
+
+```sql
+SELECT user_id, rating, COUNT(*) AS review_count
+FROM reviews
+GROUP BY user_id, rating;
+```
+
+This returns six rows: user 1 with rating 5 (one review), user 1 with `NULL`
+(two reviews), user 1 with rating 3 (one), user 2 with rating 4 (one), user 2
+with rating 5 (one), and user 3 with rating 2 (one). `NULL` forms its own
+group, so the two unrated reviews by user 1 count together. The group key is
+the pair, not either column alone.
+
+Every column in the `SELECT` list must either be inside an aggregate or
+appear in `GROUP BY`. This statement is rejected by SQL Server and by
+standard SQL:
+
+```sql
+SELECT deck_id, front, COUNT(*) AS card_count
+FROM cards
+GROUP BY deck_id;
+```
+
+`front` differs between cards in the same deck, so the database cannot return
+one value for the group. Add the column to `GROUP BY`, which is what makes
+the deck/rating example work, or aggregate it.
+
+### HAVING
+
+`WHERE` filters rows before grouping; `HAVING` filters groups after
+aggregation. An aggregate cannot appear in `WHERE`, because the groups do not
+exist yet when `WHERE` runs.
+
+**SQL Server:**
+
+```sql
+SELECT deck_id, COUNT(*) AS card_count
+FROM cards
+GROUP BY deck_id
+HAVING COUNT(*) > 1;
+```
+
+This returns decks 101 and 103, the only decks with more than one card.
+`HAVING COUNT(*) > 1` reads as "keep groups whose count exceeds one". The
+statement is standard SQL.
+
+The two filters can appear in the same query, and each runs at its own stage:
+
+**SQL Server:**
+
+```sql
+SELECT user_id, COUNT(*) AS good_reviews
+FROM reviews
+WHERE rating >= 4
+GROUP BY user_id
+HAVING COUNT(*) > 1;
+```
+
+The `WHERE` clause removes rows before grouping, including the `NULL` ratings;
+the remaining rows are user 1 with one review (rating 5) and user 2 with two
+reviews (ratings 4 and 5). The `HAVING` clause then removes user 1, leaving
+user 2. Moving the row condition to `HAVING` would make the query invalid,
+because `rating` is neither grouped nor aggregated; row conditions belong in
+`WHERE` and group conditions in `HAVING`.
+
+A `SELECT` alias is not available in `HAVING`, just as it is not available in
+`WHERE` or `GROUP BY`: repeat the aggregate there. `ORDER BY` is the only
+clause that can use a select-list alias.
+
+### Release QA Use
+
+- Start with one `COUNT(*)` per table and compare it with the expected number
+  for the environment. `COUNT` returns 0 rather than `NULL`, so a clean miss
+  is visible.
+- Count entities, not joined rows. After any one-to-many join, use
+  `COUNT(DISTINCT key)` for the entity you mean, or the count inflates.
+- Group by `email` with `HAVING COUNT(*) > 1` to find duplicate imports
+  before a migration; Part 11 turns this into a reusable pattern.
+- Compare rating averages across releases with the same `WHERE` clause and
+  the same denominator. `AVG` ignores `NULL`, so a release that starts
+  recording unrated reviews can change what the average means without
+  changing the arithmetic.
+- Check distributions with `GROUP BY`, such as public versus private decks
+  through `is_public`, to confirm that a feature flag did not shift the mix.
+  On SQL Server, `is_public` is `BIT`; group on the column, and read 1 and 0
+  as TRUE and FALSE.
+- Reconcile the parts against the whole: the sum of a `GROUP BY` count column
+  should equal the table's `COUNT(*)` when no filter removes rows. If it does
+  not, the query is losing groups, often through a join or a `NULL` filter.
+- Treat an empty aggregate result as data. `SUM` returning `NULL` after a
+  filter is a finding about the filter, not a rendering bug; decide whether
+  the report should show 0 and use `COALESCE` if so.
+
+### Watch-outs
+
+- `COUNT(*)` counts rows, `COUNT(column)` counts non-`NULL` values, and
+  `COUNT(DISTINCT column)` counts distinct non-`NULL` values. They answer
+  three different questions.
+- A one-to-many join multiplies rows before grouping. `COUNT(*)` after a join
+  is the number of joined rows, not the number of parents or children.
+- `SUM`, `AVG`, `MIN`, and `MAX` ignore `NULL` values in their input. `AVG`
+  divides by the count of non-`NULL` values, which may not be the row count
+  you expected.
+- `SUM` over an empty or all-`NULL` set is `NULL`, not 0. Only `COUNT`
+  returns 0.
+- SQL Server's `AVG` over an `INT` column returns an `INT` and discards the
+  fraction; cast to a decimal type when a fractional average matters.
+- Every nonaggregated column in `SELECT` must appear in `GROUP BY`. The
+  server rejects the query otherwise.
+- `WHERE` filters rows and cannot contain an aggregate; `HAVING` filters
+  groups and runs after `GROUP BY`. Put each condition in the clause that
+  matches its stage.
+- A select-list alias works in `ORDER BY` but not in `WHERE`, `GROUP BY`, or
+  `HAVING`.
+- Grouping on a nullable column puts `NULL` values into one group. Filter
+  them out in `WHERE` if the report should not show an "unknown" bucket.
+- `GROUP BY` only groups rows that exist. Empty parents and empty children
+  disappear unless a `LEFT JOIN` keeps them (Part 5).
