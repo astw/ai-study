@@ -1287,3 +1287,629 @@ clause that can use a select-list alias.
   them out in `WHERE` if the report should not show an "unknown" bucket.
 - `GROUP BY` only groups rows that exist. Empty parents and empty children
   disappear unless a `LEFT JOIN` keeps them (Part 5).
+
+## Part 5 — Joins and UNION
+
+Parts 2 to 4 read one table at a time, apart from the join preview in Part 4
+that showed why `COUNT(*)` can inflate. This part makes joins the subject. A
+**join** combines rows from two tables through a relationship the tables
+share. `UNION` does something different: it stacks the rows of two result
+sets on top of each other. The two operations answer different questions,
+and mixing them up is a common source of wrong counts. Every example uses
+the four flashcards tables and the fixed sample rows from Part 1, so each
+stated result can be traced to specific rows.
+
+Two terms first. In `FROM decks AS d INNER JOIN cards AS c`, `decks` is the
+**left** side and `cards` is the **right** side. The `ON` clause states the
+relationship: `ON c.deck_id = d.deck_id` matches a card to the deck whose
+`deck_id` equals the card's `deck_id`. A row with no partner on the other
+side is **unmatched**. Each join type is a rule about what happens to
+unmatched rows.
+
+Join keys follow the foreign keys from Part 1: `decks.user_id` to
+`users.user_id`, `cards.deck_id` to `decks.deck_id`, `reviews.card_id` to
+`cards.card_id`, and `reviews.user_id` to `users.user_id`. Join on those
+pairs. Joining on `title` or `display_name` is tempting because the sample
+rows repeat values, but text is not a key: users 1 and 4 share the display
+name Alice, and decks 101 and 103 share the title Biology 101.
+
+### INNER JOIN
+
+**Definition.** `INNER JOIN` returns only rows that have a match on both
+sides. An unmatched row from either table is dropped. `JOIN` on its own
+means `INNER JOIN`.
+
+**Syntax.** The second table follows the first table in `FROM`, and each
+additional table gets its own `JOIN ... ON ...` clause. `ON` carries the key
+comparison; a join without `ON` is a syntax error.
+
+**SQL Server:**
+
+```sql
+SELECT d.deck_id, d.title, c.card_id, c.front
+FROM decks AS d
+INNER JOIN cards AS c ON c.deck_id = d.deck_id
+ORDER BY d.deck_id, c.card_id;
+```
+
+This is standard SQL as well: `INNER JOIN ... ON` is the portable form, and
+the sample rows make the result easy to check by hand.
+
+**Expected rows.** Five rows, one per card: 1001 and 1002 under deck 101,
+1003 under deck 102, and 1004 and 1005 under deck 103. Deck 104 (Empty Deck)
+has no cards, so it produces no row. The count equals `COUNT(*)` on `cards`
+only because every card has a deck; the statement returns matched
+combinations, not a fixed number of either table's rows.
+
+**Release QA use.** Prove that records exist together: "every card in the
+release belongs to a deck", "every review on the new screen names a card".
+An inner join is also the right shape when a parent with no children is
+irrelevant, such as a content report that lists only decks that actually
+hold cards.
+
+**Watch-out.** An inner join cannot prove that a child is missing. A deck
+with no cards returns no row at all, so "no row" and "the deck was never
+created" look the same. When the requirement is "every deck must appear",
+use a left join and look for the `NULL`-extended row.
+
+### LEFT JOIN
+
+**Definition.** `LEFT JOIN` (also written `LEFT OUTER JOIN`) returns every
+row from the left table. A left row with matches on the right produces one
+row per match; a left row with no match produces one row with `NULL` in
+every column of the right table.
+
+**Syntax.** `FROM decks AS d LEFT JOIN cards AS c ON c.deck_id = d.deck_id`.
+The table named in `FROM` is the preserved side. Standard SQL accepts both
+`LEFT JOIN` and `LEFT OUTER JOIN`, and SQL Server accepts both spellings
+too.
+
+**SQL Server:**
+
+```sql
+SELECT d.deck_id, d.title, c.card_id, c.front
+FROM decks AS d
+LEFT JOIN cards AS c ON c.deck_id = d.deck_id
+ORDER BY d.deck_id, c.card_id;
+```
+
+**Expected rows.** Six rows: the five matched rows from the inner join, plus
+one row for deck 104 with `NULL` in `c.card_id`, `c.front`, and every other
+`cards` column. Deck 104 is preserved, not dropped, but no card information
+exists for it.
+
+To find the empty deck, turn the left join into an **anti-join**: keep the
+rows where the right side did not match.
+
+**SQL Server:**
+
+```sql
+SELECT d.deck_id, d.title
+FROM decks AS d
+LEFT JOIN cards AS c ON c.deck_id = d.deck_id
+WHERE c.card_id IS NULL
+ORDER BY d.deck_id;
+```
+
+**Expected rows.** One row: deck 104, Empty Deck. `c.card_id` is the primary
+key of `cards`, so a real card row can never have a `NULL` there; a `NULL`
+in the result can only mean "no card matched this deck".
+
+The null test must use a column that cannot be `NULL` in the right table.
+The next query has the same shape but tests `r.rating`, which is nullable.
+
+**SQL Server:**
+
+```sql
+SELECT u.user_id, r.review_id, r.rating
+FROM users AS u
+LEFT JOIN reviews AS r ON r.user_id = u.user_id
+WHERE r.rating IS NULL
+ORDER BY u.user_id, r.review_id;
+```
+
+**Expected rows.** Four rows: reviews 10003 and 10007, which belong to user
+1 and carry no rating, plus one `NULL`-extended row each for users 4 and 5.
+The result suggests that user 1 has no reviews, which is false. Testing
+`r.review_id IS NULL` instead returns only users 4 and 5, the two users with
+no reviews.
+
+**SQL Server:**
+
+```sql
+SELECT u.user_id
+FROM users AS u
+LEFT JOIN reviews AS r ON r.user_id = u.user_id
+WHERE r.review_id IS NULL
+ORDER BY u.user_id;
+```
+
+**Release QA use.** Empty-state and coverage checks. "Every deck must be
+listed in the deck picker" becomes a left join from the expected decks to
+the actual cards, filtered with `IS NULL`; the result is the list of decks
+with no cards. Deck 104 is the model: a legitimate empty deck appears as one
+`NULL`-extended row, not as a missing deck. The same shape checks optional
+relationships, such as cards that no one has reviewed.
+
+**Watch-out.** Three rules. Test a `NOT NULL` key (`c.card_id`,
+`r.review_id`), not a nullable value column. Keep the null test in `WHERE`,
+not in `ON`: `ON c.card_id IS NULL` never matches, so the query returns
+every deck instead of the empty one. And a `WHERE` condition on the
+right-hand table after the join, such as `WHERE c.front LIKE 'What is D%'`,
+removes the `NULL`-extended rows and turns the left join back into an inner
+join.
+
+### RIGHT JOIN
+
+**Definition.** `RIGHT JOIN` (also written `RIGHT OUTER JOIN`) is the mirror
+image of `LEFT JOIN`: every row from the right table is preserved, and a
+right row with no match produces one row with `NULL` in every column of the
+left table.
+
+**Syntax.** `FROM reviews AS r RIGHT JOIN cards AS c ON c.card_id =
+r.card_id`. The table named after `RIGHT JOIN` is the preserved side.
+Standard SQL and SQL Server both accept `RIGHT JOIN` and
+`RIGHT OUTER JOIN`.
+
+**SQL Server:**
+
+```sql
+SELECT c.card_id, c.front, r.review_id, r.rating
+FROM reviews AS r
+RIGHT JOIN cards AS c ON c.card_id = r.card_id
+ORDER BY c.card_id, r.review_id;
+```
+
+**Expected rows.** Eight rows. Cards 1001, 1002, and 1004 have two reviews
+each, card 1003 has one, and card 1005 has none. Every review matches a
+card, because the foreign key guarantees it, so all seven reviews appear;
+card 1005 appears once with `NULL` in `r.review_id` and `r.rating`. The
+result contains every review plus the unmatched card.
+
+**Why it is often rewritten as a left join.** `A RIGHT JOIN B` returns
+exactly the same rows as `B LEFT JOIN A`; the two statements differ only in
+which table is written first. Rewriting makes the preserved table the first
+one read.
+
+```sql
+SELECT c.card_id, c.front, r.review_id, r.rating
+FROM cards AS c
+LEFT JOIN reviews AS r ON r.card_id = c.card_id
+ORDER BY c.card_id, r.review_id;
+```
+
+The result is the same eight rows. Teams standardize on left joins for three
+reasons: the preserved table is visually first, a chain of `LEFT JOIN`s
+reads in one direction, and mixing `LEFT` and `RIGHT` in one query makes the
+reader hold two mental models at once.
+
+**Release QA use.** Use the right join when the table that must survive is
+naturally the second one in the sentence or in an existing query: "show
+every card on the results screen together with its reviews, including cards
+with none" starts the sentence with reviews and preserves cards. In practice,
+write it as the left join above; the result is identical and the next reader
+does not have to reverse it.
+
+**Watch-out.** `RIGHT JOIN` is not wrong, but it is easy to misread. The
+preserved side is the right-hand one, so a `WHERE` predicate on the left
+table removes the `NULL`-extended rows exactly as it would in a left join.
+When a query mixes both directions, write down which table each join
+preserves before you edit or extend it.
+
+### FULL OUTER JOIN
+
+**Definition.** `FULL OUTER JOIN` (also written `FULL JOIN`) preserves
+unmatched rows from both sides. A match produces one row; an unmatched left
+row appears once with `NULL`s in the right columns, and an unmatched right
+row appears once with `NULL`s in the left columns.
+
+**Syntax.** `FROM users AS u FULL OUTER JOIN decks AS d ON d.user_id =
+u.user_id`. Both SQL Server and standard SQL accept `FULL OUTER JOIN`. Check
+the target product before reusing the statement: it is standard, but not
+every database implements it.
+
+**SQL Server:**
+
+```sql
+SELECT u.user_id, u.display_name, d.deck_id, d.title
+FROM users AS u
+FULL OUTER JOIN decks AS d ON d.user_id = u.user_id
+ORDER BY u.user_id, d.deck_id;
+```
+
+**Expected rows.** Six rows. Four are matches: user 1 with decks 101 and
+102, user 2 with deck 103, and user 3 with deck 104. Two are unmatched
+users: users 4 and 5 own no decks, so their `d.deck_id` and `d.title` are
+`NULL`. No deck is unmatched, because the foreign key guarantees that every
+deck names an existing user.
+
+To find only the unmatched rows on either side, keep the full join and
+filter for the `NULL`s.
+
+**SQL Server:**
+
+```sql
+SELECT u.user_id AS user_side, d.deck_id AS deck_side
+FROM users AS u
+FULL OUTER JOIN decks AS d ON d.user_id = u.user_id
+WHERE u.user_id IS NULL OR d.deck_id IS NULL
+ORDER BY user_side, deck_side;
+```
+
+**Expected rows.** Two rows, users 4 and 5. No row has a `NULL` `user_side`,
+because the sample has no deck without an owner. The query still guards both
+directions, which is the point: compare two key sets when either side may
+contain extras.
+
+**Release QA use.** Compare key sets in both directions: a migration that
+maps old users to new users, an import file checked against a table, or two
+environments compared for missing rows. A left join answers "what is missing
+on the right?" for one chosen side; a full outer join answers both questions
+in one pass. In this schema it lists users who own nothing and decks that
+have no owner, and the second list is empty only because the foreign key
+holds. Part 11 applies the same shape to staging tables that have no
+constraints.
+
+**Watch-out.** A `WHERE` predicate on either table can collapse the outer
+join. `WHERE d.deck_id = 104` keeps the matched row for deck 104 and drops
+the `NULL`-extended users; `WHERE d.deck_id IS NULL` keeps only the users
+with no deck. Test a non-null key on each side — `u.user_id IS NULL OR
+d.deck_id IS NULL` — when both directions matter. On large tables, filter
+each input before the join rather than after it, so the full join works on
+the smallest possible row sets.
+
+### SELF JOIN
+
+**Definition.** A **self join** joins a table to itself. It is not a
+separate keyword: you write an ordinary join, give the same table two
+different aliases, and compare rows of that table with other rows of the
+same table.
+
+**Syntax.** `FROM cards AS a INNER JOIN cards AS b ON b.deck_id =
+a.deck_id`. The aliases are required: without them, the second reference to
+`cards` is ambiguous and the query fails.
+
+**Example: two cards in the same deck.**
+
+**SQL Server:**
+
+```sql
+SELECT a.deck_id,
+       a.card_id AS card_a,
+       b.card_id AS card_b
+FROM cards AS a
+INNER JOIN cards AS b ON b.deck_id = a.deck_id
+                     AND b.card_id > a.card_id
+ORDER BY a.deck_id, a.card_id, b.card_id;
+```
+
+The statement is standard SQL as well.
+
+**Expected rows.** Two rows: `(101, 1001, 1002)` and `(103, 1004, 1005)`.
+Deck 101 holds cards 1001 and 1002, and deck 103 holds 1004 and 1005; deck
+102 holds only card 1003, so it produces no pair. The condition `b.card_id >
+a.card_id` does two jobs: it stops a card from pairing with itself, and it
+keeps each pair once instead of returning both `(1001, 1002)` and
+`(1002, 1001)`. Without it, deck 101 alone would return four rows: two
+self-pairs and both orderings.
+
+**Example: two reviews on the same card.**
+
+**SQL Server:**
+
+```sql
+SELECT a.card_id,
+       a.review_id AS review_a,
+       a.user_id   AS user_a,
+       b.review_id AS review_b,
+       b.user_id   AS user_b
+FROM reviews AS a
+INNER JOIN reviews AS b ON b.card_id = a.card_id
+                       AND b.review_id > a.review_id
+ORDER BY a.card_id, a.review_id;
+```
+
+**Expected rows.** Three rows: reviews 10001 and 10002 on card 1001,
+reviews 10003 and 10006 on card 1002, and reviews 10005 and 10007 on card
+1004. Card 1003 has one review and card 1005 has none, so neither produces a
+pair. The `review_id` inequality plays the same role as the card inequality
+above.
+
+**Release QA use.** Find inconsistencies that only make sense as a pair: two
+cards in the same deck with the same front (add `AND b.front = a.front`),
+two reviews of the same card by the same user (add `AND a.user_id =
+b.user_id`), or duplicate rows created by an import. The pair form returns
+the evidence, both record IDs, which a grouped count cannot show.
+
+**Watch-out.** A self join multiplies: a table with n rows can produce n²
+combinations, and a deck with n cards produces n² rows before the inequality
+and n(n - 1) / 2 pairs after it. Keep a strict inequality on the key so each
+unordered pair appears once and no row pairs with itself, and always alias
+both sides.
+
+### Join Chains and ON vs USING
+
+**A join chain** adds one table at a time, with each `ON` connecting the new
+table to a table already in the query. The flashcards schema chains users →
+decks → cards → reviews.
+
+**SQL Server:**
+
+```sql
+SELECT u.user_id,
+       u.display_name,
+       d.deck_id,
+       d.title,
+       c.card_id,
+       c.front,
+       r.review_id,
+       r.rating
+FROM users AS u
+INNER JOIN decks   AS d ON d.user_id = u.user_id
+INNER JOIN cards   AS c ON c.deck_id = d.deck_id
+INNER JOIN reviews AS r ON r.card_id = c.card_id
+ORDER BY u.user_id, d.deck_id, c.card_id, r.review_id;
+```
+
+The statement is standard SQL as well.
+
+**Expected rows.** Seven rows, one per review: five for user 1 (deck 101 has
+cards 1001 and 1002 with four reviews between them, and deck 102 has card
+1003 with one) and two for user 2 (deck 103 has card 1004 with two reviews).
+The chain drops every parent with no child anywhere below it: users 4 and 5
+have no decks; user 3 owns deck 104, which has no cards; and card 1005 has
+no reviews. The finest table, `reviews`, sets the row count.
+
+The written order of inner joins does not change the result; the optimizer
+is free to reorder them. The order does matter once an outer join is in the
+chain. A `LEFT JOIN` followed by an `INNER JOIN` on the null-extended table
+drops the preserved rows again. If the goal is "every deck, with its cards
+and reviews when they exist", every later join must also be a `LEFT JOIN`,
+and the final grain must be stated before the query is run.
+
+An `ON` clause may carry more than the key. `ON c.deck_id = d.deck_id AND
+c.front LIKE 'What is D%'` changes which rows count as a match. In an inner
+join that is equivalent to putting the filter in `WHERE`; in an outer join
+it is not, because rows that fail the extra condition become unmatched rows
+instead of disappearing.
+
+**ON versus USING.** `ON` names the key comparison. Standard SQL also offers
+a shorthand, `USING`, for the case where both tables give the key the same
+column name. This schema qualifies: `decks.deck_id` and `cards.deck_id`
+share a name.
+
+**SQL Server:**
+
+```sql
+SELECT d.deck_id, d.title, c.card_id
+FROM decks AS d
+INNER JOIN cards AS c ON c.deck_id = d.deck_id;
+```
+
+This returns five rows, one per card. The join column must be qualified as
+`d.deck_id` or `c.deck_id`; an unqualified `deck_id` is ambiguous because
+both tables have that column name.
+
+**Standard SQL:**
+
+```sql
+SELECT deck_id, title, card_id
+FROM decks AS d
+INNER JOIN cards AS c USING (deck_id);
+```
+
+**SQL Server does not accept `USING`.** It is a syntax error there; T-SQL
+joins use `ON`. The `USING` form is standard SQL only, and it changes the
+output shape: the join column appears once, so `deck_id` is unambiguous
+without a qualifier. The row count is the same five rows. `USING` also
+requires the two key columns to have the same name; when they do not, only
+`ON` works.
+
+### Join Multiplication
+
+A one-to-many join multiplies rows. `decks` to `cards` is one-to-many (deck
+101 has two cards), and `cards` to `reviews` is one-to-many (card 1001 has
+two reviews). Each join repeats the parent row once per matching child, so a
+count taken after the join is a count of combinations.
+
+Start with the deck-to-card join and ask for three counts.
+
+**SQL Server:**
+
+```sql
+SELECT COUNT(*)                  AS joined_rows,
+       COUNT(DISTINCT d.deck_id) AS decks,
+       COUNT(DISTINCT c.card_id) AS cards
+FROM decks AS d
+INNER JOIN cards AS c ON c.deck_id = d.deck_id;
+```
+
+**Expected rows.** One row: 5, 3, and 5. There are five joined rows, three
+decks that have at least one card, and five cards. Deck 101 contributes two
+rows because it holds two cards, so `COUNT(*)` counts that deck twice.
+`COUNT(DISTINCT d.deck_id)` recovers the number of decks, and
+`COUNT(DISTINCT c.card_id)` counts the cards. A report that asked "how many
+decks have content?" and used `COUNT(*)` would answer 5, which is wrong.
+
+Add reviews and the multiplication compounds.
+
+**SQL Server:**
+
+```sql
+SELECT d.deck_id,
+       d.title,
+       COUNT(*)                  AS joined_rows,
+       COUNT(DISTINCT c.card_id) AS reviewed_cards
+FROM decks AS d
+INNER JOIN cards   AS c ON c.deck_id = d.deck_id
+INNER JOIN reviews AS r ON r.card_id = c.card_id
+GROUP BY d.deck_id, d.title
+ORDER BY d.deck_id;
+```
+
+**Expected rows.** Three rows: deck 101 with 4 joined rows and 2 distinct
+cards, deck 102 with 1 and 1, and deck 103 with 2 and 1. Deck 101 has two
+cards but four joined rows, because its two cards carry four reviews. Deck
+103 also has two cards, but only card 1004 has reviews, so
+`COUNT(DISTINCT c.card_id)` reports 1 and means "cards with at least one
+review", not "cards in the deck". Deck 104 is absent because the inner joins
+require a card and a review.
+
+`COUNT(DISTINCT key)` repairs a count. It does not repair a sum: on this
+chain `SUM(r.rating)` counts each review once, but `SUM(c.card_id)` repeats a
+card's id once per review, because the card row is duplicated. When one
+query needs counts from more than one child table, pre-aggregate each child
+to one row per parent, then join the summaries.
+
+**SQL Server:**
+
+```sql
+SELECT d.deck_id,
+       d.title,
+       card_counts.card_count,
+       review_counts.review_count
+FROM decks AS d
+LEFT JOIN (
+    SELECT deck_id, COUNT(*) AS card_count
+    FROM cards
+    GROUP BY deck_id
+) AS card_counts ON card_counts.deck_id = d.deck_id
+LEFT JOIN (
+    SELECT cards.deck_id, COUNT(*) AS review_count
+    FROM cards
+    INNER JOIN reviews ON reviews.card_id = cards.card_id
+    GROUP BY cards.deck_id
+) AS review_counts ON review_counts.deck_id = d.deck_id
+ORDER BY d.deck_id;
+```
+
+**Expected rows.** Four rows: deck 101 with 2 cards and 4 reviews, deck 102
+with 1 and 1, deck 103 with 2 and 2, and deck 104 with `NULL` and `NULL`.
+Each subquery returns at most one row per deck, so the outer joins cannot
+multiply. The `LEFT JOIN` keeps deck 104, which has no cards and no reviews;
+an inner join would drop it. The subquery syntax is Part 6 material; the
+point here is the shape: aggregate the many side first, then join once.
+
+### UNION and UNION ALL
+
+A join matches rows from two tables side by side. `UNION` combines result
+sets top to bottom, stacking their rows into one result. Both branches must
+return the same number of columns, with compatible types in each position,
+and the columns line up by position rather than by name.
+
+**SQL Server:**
+
+```sql
+SELECT user_id FROM decks
+UNION
+SELECT user_id FROM reviews
+ORDER BY user_id;
+```
+
+**Expected rows.** Three rows: 1, 2, and 3. Those are the distinct user IDs
+that appear in `decks` or in `reviews`; the repeated values inside each
+table collapse into one. The `ORDER BY` applies to the combined result, not
+to either branch. The statement is standard SQL as well.
+
+`UNION ALL` keeps every row.
+
+**SQL Server:**
+
+```sql
+SELECT user_id FROM decks
+UNION ALL
+SELECT user_id FROM reviews
+ORDER BY user_id;
+```
+
+**Expected rows.** Eleven rows: four from `decks` (user IDs 1, 1, 2, and 3)
+and seven from `reviews` (1, 2, 1, 1, 2, 3, and 1). Sorted, the result has
+six 1s, three 2s, and two 3s. `UNION` answers "which distinct values
+appear?"; `UNION ALL` answers "which rows came from each source?" and keeps
+the duplicates that are often the evidence.
+
+The rules that decide whether a `UNION` runs at all:
+
+- **Same shape.** Each branch must select the same number of columns, and
+  each column position must hold a compatible type. When the types differ,
+  the server applies its conversion rules by position, so a number and a
+  text value may convert, or may fail when a value does not parse. Do not
+  rely on the conversion; select matching types.
+- **Position, not name.** The result takes its column names from the first
+  branch. If the second branch selects `card_id` where the first selects
+  `deck_id`, both values stack under the name `deck_id`. The server checks
+  type and count; it cannot check that the two names mean the same thing.
+- **Duplicate removal.** `UNION` removes duplicate rows from the combined
+  result, comparing the whole selected row. `NULL` counts as equal to
+  `NULL` for this purpose, so two `NULL`s collapse into one. `UNION ALL`
+  performs no comparison and returns every row from both branches.
+- **Cost.** Duplicate removal requires the server to sort or hash the
+  combined rows, so `UNION` costs more than `UNION ALL`; `UNION ALL` can
+  stream both branches. Use `UNION` only when the question is about
+  distinct values.
+- **One `ORDER BY`.** A single `ORDER BY` at the end applies to the whole
+  result. An individual branch cannot have its own final `ORDER BY` unless
+  the branch is wrapped as a subquery.
+
+### Release QA Use
+
+- Choose the join by what must survive. Inner join when only matched pairs
+  matter; left join when every parent must appear; full outer join when
+  either side may contain extras. State the expected grain before writing
+  the query: one row per card, per deck, or per review.
+- Build coverage checks as anti-joins. Left join the expected set to the
+  actual set and filter `IS NULL` on a non-null key from the right table.
+  Deck 104 is the model: the correct check returns exactly that one deck,
+  with `NULL` card columns. A zero-row inner join proves nothing about
+  missing children.
+- Count the entity, not the joined rows. After a one-to-many join,
+  `COUNT(*)` counts combinations. Use `COUNT(DISTINCT key)` when one query
+  must answer, or pre-aggregate each child to one row per parent and join
+  the summaries. Deck 101, with two cards and four reviews, makes the
+  difference permanent in this sample.
+- Walk the foreign keys when you chain. users → decks → cards → reviews
+  returns seven rows for the seven reviews; more rows mean a key is not
+  unique or a table was joined twice. Check the count against the finest
+  table, not against the first one.
+- Compare key sets with `FULL OUTER JOIN` and `IS NULL` on both sides.
+  "Which users own no deck, and which decks have no owner?" is one query
+  instead of two, and it does not assume which side is allowed to be empty.
+- Use `UNION ALL` for reconciliation counts and `UNION` for distinct value
+  lists. A count per source preserves duplicate evidence; collapsing
+  duplicates first hides the import that created them.
+- Verify both sides of every join key before trusting the result. A join
+  between different types or different collations can convert values,
+  ignore an index, or fail outright, and a plausible-looking row set does
+  not prove the match rule was the intended one.
+
+### Watch-outs
+
+- `INNER JOIN` drops unmatched rows from both sides. A missing child is
+  invisible, not `NULL`; use a left join and a null test to see it.
+- A `LEFT JOIN` is only as good as its null test: use a `NOT NULL` key from
+  the right table, keep the test in `WHERE`, and remember that filtering the
+  right table in `WHERE` turns the outer join back into an inner join.
+- `ON` controls matching and `WHERE` controls the result. In an inner join
+  the two placements often agree; in an outer join they do not, because an
+  `ON` condition can turn a row into an unmatched one instead of removing
+  it.
+- `RIGHT JOIN` is a left join with the tables swapped. Prefer the left form
+  so the preserved table comes first and a chain of joins reads in one
+  direction.
+- `FULL OUTER JOIN` preserves unmatched rows on both sides, and a `WHERE`
+  predicate on either table can reduce it to an inner join or a one-sided
+  anti-join. Use `u.user_id IS NULL OR d.deck_id IS NULL` when both
+  directions matter, and filter each input before the join on large tables.
+- A self join needs two aliases and multiplies: n rows can produce n²
+  combinations. Add a strict key inequality so each pair appears once and
+  no row pairs with itself.
+- `COUNT(*)` after a one-to-many join counts joined rows, not parents or
+  children. `COUNT(DISTINCT key)` fixes a count but not a `SUM`; when
+  several child tables meet in one query, pre-aggregate each one first.
+- SQL Server does not support `JOIN ... USING`; use `ON`. `USING` is
+  standard SQL, requires same-named key columns, and merges the join column
+  into one output column.
+- `UNION` requires the same column count with compatible types in each
+  position, aligns columns by position, and takes its labels from the first
+  branch. `UNION` removes duplicates and costs more; `UNION ALL` keeps them.
+  Choosing the wrong one either hides duplicates or double-counts them.
