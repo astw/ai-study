@@ -738,9 +738,10 @@ This returns reviews 10002 (4), 10004 (3), and 10006 (2): both endpoints are
 included, and the two `NULL` ratings are excluded. The statement is standard
 SQL.
 
-The inclusive upper bound is a trap for date and time columns. This filter
-looks like "the last five days" but loses rows recorded later on the final
-day:
+An inclusive upper bound of a bare date is a trap for date and time columns:
+`BETWEEN '2026-01-20' AND '2026-01-25'` stops at midnight at the start of
+January 25, so it loses anything recorded later that day. Write the window as
+a half-open range instead. This one covers January 20 through January 24:
 
 **SQL Server:**
 
@@ -751,12 +752,13 @@ WHERE reviewed_at >= '2026-01-20'
   AND reviewed_at <  '2026-01-25';
 ```
 
-This half-open range returns reviews 10001 through 10005. Review 10006,
-recorded at 2026-01-25 14:00:00, is excluded because it is not before
-2026-01-25 00:00:00; a `BETWEEN ... AND '2026-01-25'` version would exclude
-it too, because the bare date means midnight. The half-open form makes the
-intended boundary explicit. The standard form uses `TIMESTAMP` literals but
-keeps the same comparison shape.
+This returns reviews 10001 through 10005. Review 10006, recorded at
+2026-01-25 14:00:00, is outside the window because the upper bound is the
+start of January 25. If the requirement were "through January 25", the upper
+bound would be `< '2026-01-26'`, whereas `BETWEEN ... AND '2026-01-25'` would
+silently drop review 10006 because the bare date means midnight. The
+half-open form makes the intended boundary explicit, and the standard form
+uses `TIMESTAMP` literals but keeps the same comparison shape.
 
 `LIKE` matches text against a pattern. `%` stands for any run of zero or more
 characters, and `_` stands for exactly one character.
