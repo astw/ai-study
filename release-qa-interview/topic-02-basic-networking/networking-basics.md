@@ -282,6 +282,43 @@ Take `192.168.1.100/26`.
 | 192.168.1.0/28 | 192.168.1.0 | 192.168.1.1 | 192.168.1.14 | 192.168.1.15 |
 | 192.168.1.240/28 | 192.168.1.240 | 192.168.1.241 | 192.168.1.254 | 192.168.1.255 |
 
+### Larger prefixes: /8, /16, /24
+
+The same rules scale to larger networks. Host bits = 32 − prefix; addresses per
+subnet = 2^(host bits); usable hosts = that number − 2. The `256 − mask octet`
+shortcut applies to the octet where the mask stops being 255: the second octet
+for /8, the third for /16, and the fourth for /24.
+
+| Prefix | Network bits | Host bits | Addresses per subnet | Example network | Broadcast | Usable hosts |
+|---|---|---|---|---|---|---|
+| /8 | 8 | 24 | 16,777,216 | 10.0.0.0 | 10.255.255.255 | 16,777,214 |
+| /16 | 16 | 16 | 65,536 | 172.16.0.0 | 172.16.255.255 | 65,534 |
+| /24 | 24 | 8 | 256 | 192.168.1.0 | 192.168.1.255 | 254 |
+
+For `10.20.30.40/8`:
+
+- The first octet is the network, so the network address is `10.0.0.0`.
+- The broadcast address is `10.255.255.255`.
+- The usable range is `10.0.0.1` through `10.255.255.254`.
+- Host bits = 24, so usable hosts = 2^24 − 2 = 16,777,214.
+
+For `172.16.5.9/16`:
+
+- The first two octets are the network, so the network address is `172.16.0.0`.
+- The broadcast address is `172.16.255.255`.
+- The usable range is `172.16.0.1` through `172.16.255.254`.
+- Host bits = 16, so usable hosts = 2^16 − 2 = 65,534.
+
+The shortcut `256 − last mask octet` only works when the prefix ends in the
+fourth octet, as it does for /24–/28. For /16, the interesting octet is the
+third; for /8, it is the second. Use the general formula when the prefix is
+shorter than /24.
+
+One common private range is not octet-aligned: `172.16.0.0/12` has 12 network
+bits and 20 host bits, so it has 1,048,574 usable hosts and covers
+`172.16.0.0` through `172.31.255.255`. Be careful with masks such as /12, /20,
+or /22; the block size can fall in the middle of an octet.
+
 ### Default gateway, routing, and NAT
 
 If the destination is on the same subnet, the sender uses ARP to find the
