@@ -323,3 +323,175 @@ IPv6 has no broadcast; it uses multicast instead. It was designed without NAT,
 and hosts can configure themselves with SLAAC or use DHCPv6. For a new-grad
 interview, know the format, the shortening rules, and the main address types;
 advanced IPv6 subnetting is out of scope here.
+
+## Part 4 — Protocols and Ports
+
+### TCP vs UDP
+
+| Feature | TCP | UDP |
+|---|---|---|
+| Connection | Three-way handshake before data | No connection |
+| Reliability | Retransmits lost segments | No retransmission |
+| Ordering | Delivers in sequence | No ordering guarantee |
+| Overhead | Higher (headers, state, acknowledgments) | Lower |
+| Speed | Slower to start, steady under loss | Faster, but loss is visible to the app |
+| Typical uses | HTTP/HTTPS, SSH, email, file transfer | DNS queries, DHCP, NTP, voice, video, SNMP |
+
+TCP is the safe default when every byte matters. UDP is the choice when a late
+packet is worse than a lost one, such as a live call, or when the request and
+response are small and self-contained, such as a DNS query.
+
+### The TCP three-way handshake
+
+1. The client sends **SYN** with an initial sequence number.
+2. The server replies **SYN-ACK**, acknowledging the client and sending its own
+   sequence number.
+3. The client sends **ACK**, and the connection is established.
+
+Other flags worth knowing: **FIN** closes one direction, **RST** aborts the
+connection, **PSH** asks for immediate delivery, and **URG** marks urgent data.
+A refused connection usually returns RST; a filtered or dropped connection
+usually times out.
+
+### Ports and sockets
+
+A port is a 16-bit number from 0 to 65535. Ports 0–1023 are well known,
+1024–49151 are registered, and 49152–65535 are ephemeral client ports. A
+**socket** is an IP address plus a port, such as `10.0.0.5:443`. A server listens
+on a fixed port; the client uses an ephemeral source port for the conversation.
+
+| Port | Protocol | Service |
+|---|---|---|
+| 20/21 | TCP | FTP |
+| 22 | TCP | SSH |
+| 23 | TCP | Telnet |
+| 25 | TCP | SMTP |
+| 53 | UDP/TCP | DNS |
+| 67/68 | UDP | DHCP |
+| 80 | TCP | HTTP |
+| 110 | TCP | POP3 |
+| 123 | UDP | NTP |
+| 143 | TCP | IMAP |
+| 161/162 | UDP | SNMP |
+| 443 | TCP | HTTPS |
+| 445 | TCP | SMB |
+| 3306 | TCP | MySQL |
+| 3389 | TCP | RDP |
+| 5432 | TCP | PostgreSQL |
+| 6379 | TCP | Redis |
+| 8080 | TCP | HTTP alternative |
+
+An open port proves only that something is listening. It does not prove the
+application is healthy, the database is reachable, or the response is correct.
+
+### HTTP and HTTPS
+
+HTTP is a request-response protocol. Common methods:
+
+| Method | Meaning | Safe? | Idempotent? |
+|---|---|---|---|
+| GET | Read a resource | Yes | Yes |
+| HEAD | Read headers only | Yes | Yes |
+| POST | Create or submit data | No | No |
+| PUT | Replace a resource | No | Yes |
+| PATCH | Partially update a resource | No | No |
+| DELETE | Remove a resource | No | Yes |
+
+Status codes come in families:
+
+- **1xx** informational
+- **2xx** success, such as 200 OK, 201 Created, 204 No Content
+- **3xx** redirect, such as 301 Moved Permanently, 302 Found, 304 Not Modified
+- **4xx** client error, such as 400 Bad Request, 401 Unauthorized, 403
+  Forbidden, 404 Not Found, 409 Conflict, 429 Too Many Requests
+- **5xx** server error, such as 500 Internal Server Error, 502 Bad Gateway, 503
+  Service Unavailable, 504 Gateway Timeout
+
+Headers carry metadata: `Host`, `Content-Type`, `Content-Length`,
+`Authorization`, `Cookie`, `Set-Cookie`, and `Cache-Control` are the ones a QA
+engineer reads most often. HTTPS is HTTP carried inside TLS, normally on port
+443.
+
+### TLS and certificates at a high level
+
+TLS encrypts and authenticates a connection. In a simplified handshake, the
+client and server agree on parameters, the server presents a certificate, they
+establish shared keys, and the rest of the connection is encrypted.
+
+A certificate binds a hostname to a public key and is signed by a certificate
+authority. Browsers and clients check that the certificate is valid, matches
+the hostname, chains to a trusted issuer, and has not expired. Common errors are
+an expired certificate, a hostname mismatch, an untrusted issuer, or a local
+clock that is wrong. These look like connection failures but are trust or time
+problems, not packet loss.
+
+### DNS
+
+DNS maps names to addresses. The hierarchy is root → top-level domain →
+authoritative server for the domain, with a recursive resolver doing the
+lookups and caching the answers for a time-to-live (TTL) period.
+
+| Record | Purpose |
+|---|---|
+| A | IPv4 address |
+| AAAA | IPv6 address |
+| CNAME | Alias to another name |
+| MX | Mail server |
+| TXT | Free-form text, often verification or policy |
+| NS | Authoritative name servers for the zone |
+| PTR | Reverse lookup from address to name |
+| SRV | Service location, host and port |
+
+A lookup asks the resolver; the resolver walks the hierarchy if the answer is
+not cached, then returns the record. Common failures are NXDOMAIN (the name does
+not exist), SERVFAIL (the resolver or authority failed), a timeout (DNS is
+unreachable), a stale cached record, or split-horizon DNS returning different
+answers inside and outside the network.
+
+### DHCP
+
+DHCP assigns addresses automatically using DORA:
+
+1. **Discover** — the client broadcasts for a server.
+2. **Offer** — a server offers an address and options.
+3. **Request** — the client asks for the offered address.
+4. **Acknowledge** — the server confirms the lease.
+
+The lease includes an address, subnet mask, default gateway, and DNS servers.
+When DHCP fails, a Windows or macOS client may self-assign a `169.254.x.x`
+address (APIPA), which usually means it can reach the local link but not the
+internet. A wrong gateway or DNS server in the lease produces "connected but no
+internet" symptoms.
+
+### ARP and ICMP
+
+**ARP** maps an IP address to a MAC address on the local subnet. The sender
+broadcasts "who has this IP?", and the owner replies with its MAC. The result is
+cached for a short time. ARP only works within a broadcast domain; traffic to
+another subnet goes to the gateway's MAC instead.
+
+**ICMP** carries control and error messages. `ping` sends an echo request and
+waits for an echo reply. `traceroute` (or `tracert` on Windows) uses increasing
+TTL values to reveal each hop. A blocked ICMP does not necessarily mean the host
+is down: many firewalls drop ping while allowing TCP on the application port.
+
+### Other common protocols
+
+| Protocol | Port | Purpose | QA relevance |
+|---|---|---|---|
+| SSH | 22 | Encrypted remote shell and tunneling | SFTP and Git-over-SSH use it |
+| FTP | 20/21 | File transfer, plaintext | Credentials and data are not encrypted |
+| SFTP | 22 | File transfer over SSH | Encrypted; often confused with FTPS |
+| SMTP | 25, 587 | Send mail | 587 is the submission port with authentication |
+| IMAP | 143, 993 | Read mail, keep it on the server | 993 is IMAP over TLS |
+| POP3 | 110, 995 | Download mail | 995 is POP3 over TLS |
+| NTP | 123 | Time synchronization | Wrong time breaks TLS and logs |
+| SNMP | 161/162 | Network monitoring | 162 is traps; often blocked or restricted |
+
+### What QA should remember
+
+- An open port is not a healthy service; test the response, not just the socket.
+- A certificate error is a trust or time problem, not packet loss.
+- If an IP works but the name does not, suspect DNS.
+- If a client has a `169.254.x.x` address, suspect DHCP.
+- If ping fails but the app works, ICMP may be blocked; test the actual port.
