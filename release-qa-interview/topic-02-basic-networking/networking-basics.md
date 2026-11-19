@@ -495,3 +495,163 @@ is down: many firewalls drop ping while allowing TCP on the application port.
 - If an IP works but the name does not, suspect DNS.
 - If a client has a `169.254.x.x` address, suspect DHCP.
 - If ping fails but the app works, ICMP may be blocked; test the actual port.
+
+## Part 5 — Troubleshooting and Commands
+
+### The diagnostic ladder
+
+Work from the outside in. Each rung answers one question and points to the next;
+do not jump to the application before the lower rungs are clear.
+
+| Rung | Question | Evidence | Typical tool |
+|---|---|---|---|
+| Scope | One user, one site, or everyone? | Colleague reports, status page, another device | People and monitoring |
+| Link | Is the interface up? | Connected/disabled, Wi-Fi association, cable | `ipconfig`, `ifconfig`, `ip addr` |
+| IP | Is there a valid address and gateway? | Address, mask, gateway, APIPA | `ipconfig /all`, `ip route` |
+| DNS | Does the name resolve? | A/AAAA answer, NXDOMAIN, SERVFAIL | `nslookup`, `dig`, `Resolve-DnsName` |
+| Route | Can packets reach the destination? | Loss, latency, hop path | `ping`, `tracert`, `traceroute` |
+| Port | Is the service port reachable? | Open, refused, timed out | `Test-NetConnection`, `nc`, `curl` |
+| TLS | Is the certificate trusted and current? | Chain, dates, hostname, protocol | `openssl s_client`, browser |
+| HTTP | What did the server return? | Status code, headers, body | `curl -v`, DevTools |
+| Application | Is the app failing despite a healthy path? | Logs, stack traces, API errors | App logs, APM |
+
+### Commands by platform
+
+**Windows (PowerShell):**
+
+```powershell
+ipconfig /all
+ping example.com
+tracert example.com
+nslookup example.com
+Resolve-DnsName example.com
+netstat -ano
+route print
+arp -a
+Test-NetConnection example.com -Port 443
+curl.exe -v https://example.com
+```
+
+**macOS:**
+
+```bash
+ifconfig
+ping -c 4 example.com
+traceroute example.com
+dig example.com
+netstat -an
+route -n get default
+arp -a
+nc -vz example.com 443
+curl -v https://example.com
+openssl s_client -connect example.com:443 -servername example.com
+```
+
+**Linux:**
+
+```bash
+ip addr
+ip route
+ping -c 4 example.com
+traceroute example.com
+dig example.com
+ss -tulpn
+ip neigh
+nc -vz example.com 443
+curl -v https://example.com
+tcpdump -i any -n port 443
+openssl s_client -connect example.com:443 -servername example.com
+```
+
+### Reading the output
+
+- **`ping`**: packet loss and the min/avg/max round-trip time. "Request timed
+  out" usually means no reply; "Destination host unreachable" usually means no
+  route. Either can also come from a firewall.
+- **`tracert` / `traceroute`**: each hop and its latency. `* * *` can mean a
+  filtered probe, not necessarily a dead router.
+- **`nslookup` / `dig`**: the answer section, TTL, and error codes. NXDOMAIN
+  means the name does not exist; SERVFAIL means the resolver failed; a timeout
+  means DNS is unreachable.
+- **`netstat` / `ss`**: listening ports and established connections. A service
+  that is not listening cannot accept a connection, no matter how healthy the
+  network is.
+- **`curl -v`**: shows DNS, TCP connect, TLS handshake, request headers, response
+  status, and response headers. "Could not resolve host" is DNS; "Connection
+  refused" is a closed port; "Operation timed out" suggests a filtered or
+  unreachable port; a certificate error is TLS.
+- **`openssl s_client`**: the certificate chain, validity dates, hostname, and
+  negotiated TLS version. Look for `verify return code: 0 (ok)`.
+- **`tcpdump`**: packet-level evidence such as retransmissions, resets, and
+  missing replies. Capture only on systems you are authorized to test.
+
+### Symptom to likely layer
+
+| Symptom | Likely layer | First check |
+|---|---|---|
+| Works by IP, fails by name | DNS | `nslookup`, `dig` |
+| Works inside the network, fails from outside | NAT, firewall, or route | `curl` from each side |
+| One site fails, others fine | Local link, access point, or ISP | Link status, `ping` to the gateway |
+| One port times out, other ports work | Firewall or service | `Test-NetConnection`, `nc` |
+| Connection refused | Service not listening or host reachable | `netstat`, `ss` |
+| Certificate warning | TLS, time, or hostname | `openssl s_client` |
+| Everything is slow | Bandwidth, latency, packet loss, or server | `ping`, load metrics |
+| Intermittent failures | Wi-Fi, packet loss, or load balancer | Repeated tests, logs |
+| 502 or 504 from a proxy | Upstream service or timeout | Upstream logs, health check |
+| 401 or 403 | Authentication or authorization | Credentials, roles, tokens |
+
+### What is not a network bug
+
+- A 500 response returned quickly with a healthy TCP and TLS connection is an
+  application error, not a network outage.
+- A 401 or 403 is an authentication or authorization decision.
+- A slow database query with normal network latency is a server or query
+  problem.
+- A browser extension or stale cache can break one user's page while the
+  network is fine.
+- A 503 from a load balancer may be capacity or health-check policy, not
+  connectivity.
+
+Classify the layer before writing the bug; "network issue" is a hypothesis, not
+a diagnosis.
+
+### A bug report template
+
+```text
+Summary: one sentence naming the symptom and the affected journey.
+
+Environment:
+- Build/version:
+- OS, browser, device:
+- Network: Wi-Fi or Ethernet, VPN, subnet, DNS server
+- Time and timezone:
+
+Steps to reproduce:
+1.
+2.
+3.
+
+Expected:
+
+Actual:
+
+Evidence:
+- ping and traceroute output
+- nslookup/dig output
+- curl -v output
+- screenshot or screen recording
+- application logs and correlation ID
+
+Suspected layer: link / IP / DNS / route / port / TLS / HTTP / application
+
+Impact:
+
+Workaround:
+```
+
+### Safety and authorization
+
+Only run scans, captures, and fault injection on systems you are authorized to
+test. `tcpdump` and some port checks need elevated privileges; production
+traffic may contain personal data. When in doubt, ask before capturing, and
+store evidence securely.
