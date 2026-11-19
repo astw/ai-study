@@ -1321,7 +1321,8 @@ means `INNER JOIN`.
 
 **Syntax.** The second table follows the first table in `FROM`, and each
 additional table gets its own `JOIN ... ON ...` clause. `ON` carries the key
-comparison; a join without `ON` is a syntax error.
+comparison. In SQL Server, a join without `ON` is a syntax error; standard
+SQL also allows `USING`, shown below.
 
 **SQL Server:**
 
@@ -1483,12 +1484,11 @@ reasons: the preserved table is visually first, a chain of `LEFT JOIN`s
 reads in one direction, and mixing `LEFT` and `RIGHT` in one query makes the
 reader hold two mental models at once.
 
-**Release QA use.** Use the right join when the table that must survive is
-naturally the second one in the sentence or in an existing query: "show
-every card on the results screen together with its reviews, including cards
-with none" starts the sentence with reviews and preserves cards. In practice,
-write it as the left join above; the result is identical and the next reader
-does not have to reverse it.
+**Release QA use.** Use the right join when an existing query already starts
+from `reviews` and the cards must survive: `FROM reviews AS r RIGHT JOIN
+cards AS c` keeps every card, including card 1005, and leaves the query's
+first table in place. In practice, write it as the left join above; the
+result is identical and the next reader does not have to reverse it.
 
 **Watch-out.** `RIGHT JOIN` is not wrong, but it is easy to misread. The
 preserved side is the right-hand one, so a `WHERE` predicate on the left
