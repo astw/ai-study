@@ -1193,3 +1193,250 @@ When a command returns `Permission denied`, check three things: whether your
 user has the needed read, write, or execute bit (`ls -l`), whether your user is
 in the owning group (`id`), and whether a parent directory is traversable. Use
 `sudo` only when the task genuinely requires root.
+
+## Part 6 — Disks, Memory, and Archives
+
+### Disk and memory checks
+
+Use `df`, `du`, and `free` from Part 1. Check `df -h` before a build or a large
+download, `du -sh` on the artifact and log directories when space disappears,
+and `free -h` before a load or soak test. On Linux, `df -i` catches inode
+exhaustion, which looks like a full disk even when space remains.
+
+### `tar`
+
+**Day-to-day.** Create, list, and extract tar archives.
+
+| Flag | What it does |
+|---|---|
+| `-c` | Create an archive |
+| `-x` | Extract an archive |
+| `-z` | Use gzip compression |
+| `-t` | List the contents |
+| `-f` | Name the archive file |
+
+**Linux:**
+
+```bash
+tar -czf artifacts/app.tar.gz releases/2026-11-18
+tar -tzf artifacts/app.tar.gz
+tar -xzf artifacts/app.tar.gz -C /tmp/release
+```
+
+**macOS:** The same commands work; macOS uses bsdtar, while some GNU-only
+options differ.
+
+**Release QA use:** Package a build for handoff, list the archive before
+extracting it, and extract into a clean directory.
+
+**Watch out:** `-f` must be immediately followed by the archive name, and
+extracting in place can overwrite files; use `-C` to choose the target
+directory.
+
+### `gzip`
+
+**Frequent.** Compress a file with gzip.
+
+| Flag | What it does |
+|---|---|
+| `-k` | Keep the original file |
+| `-d` | Decompress |
+| `-9` | Use the best compression |
+
+**Linux:**
+
+```bash
+gzip app.log
+gzip -k app.log
+```
+
+**macOS:** Same commands.
+
+**Release QA use:** Shrink a large log before attaching it to a bug report.
+
+**Watch out:** `gzip` replaces the original with the `.gz` file unless you use
+`-k`.
+
+### `gunzip`
+
+**Frequent.** Decompress a gzip file.
+
+| Flag | What it does |
+|---|---|
+| `-k` | Keep the compressed file |
+| `-c` | Write to standard output |
+
+**Linux:**
+
+```bash
+gunzip app.log.gz
+gunzip -k app.log.gz
+```
+
+**macOS:** Same commands.
+
+**Release QA use:** Read a compressed log without changing the archived copy.
+
+**Watch out:** `gunzip` removes the `.gz` file on success; use `-k` to keep it.
+
+### `zip`
+
+**Frequent.** Create a zip archive.
+
+| Flag | What it does |
+|---|---|
+| `-r` | Include directories recursively |
+| `-q` | Quiet mode |
+
+**Linux:**
+
+```bash
+zip -r artifacts/logs.zip logs/
+```
+
+**macOS:** Same command.
+
+**Release QA use:** Package logs or artifacts for sharing with support or a
+vendor.
+
+**Watch out:** Without `-r`, directories are skipped; check the result with
+`unzip -l`.
+
+### `unzip`
+
+**Frequent.** List or extract a zip archive.
+
+| Flag | What it does |
+|---|---|
+| `-l` | List the contents |
+| `-d` | Extract into a directory |
+
+**Linux:**
+
+```bash
+unzip -l artifacts/logs.zip
+unzip artifacts/logs.zip -d /tmp/release
+```
+
+**macOS:** Same commands.
+
+**Release QA use:** Inspect an archive before extracting it and keep the
+extraction in a clean directory.
+
+**Watch out:** Archives can contain paths that escape the target directory;
+extract untrusted files only in an isolated directory.
+
+### `sha256sum`
+
+**Day-to-day.** Compute or verify SHA-256 checksums.
+
+| Flag | What it does |
+|---|---|
+| `-c` | Check checksums from a file |
+
+**Linux:**
+
+```bash
+sha256sum artifacts/app.zip
+sha256sum -c checksums.txt
+```
+
+**macOS:** `sha256sum` is not standard; use `shasum -a 256 artifacts/app.zip`.
+
+**Release QA use:** Verify that an artifact matches the published checksum
+before release.
+
+**Watch out:** A checksum proves integrity, not authenticity; compare it with a
+trusted source.
+
+## Part 7 — Pipes, Redirection, Exit Codes, and Environment
+
+### Pipes
+
+The pipe operator `|` sends the standard output of one command into the
+standard input of the next. `grep -i error app.log | wc -l` counts matching
+lines without creating a temporary file. The exit status of a pipeline is the
+status of its last command unless the shell enables `pipefail`.
+
+### Output redirection
+
+- `>` writes standard output to a file, overwriting it.
+- `>>` appends standard output to a file.
+- `2>` writes standard error to a file.
+- `2>&1` sends standard error to the same place as standard output.
+- Order matters: `> file 2>&1` sends both streams to the file, while
+  `2>&1 > file` sends only stdout to the file and leaves stderr on the terminal.
+
+### Exit codes
+
+`$?` holds the exit status of the last command. `0` means success; any non-zero
+value means failure. Check it immediately, before running another command.
+
+### `env`
+
+**Frequent.** Print the environment or run a command with modified variables.
+
+| Usage | What it does |
+|---|---|
+| `env` | Print all environment variables |
+| `env \| sort` | Print them in sorted order |
+| `env QA_ENV=staging ./run-tests.sh` | Run with one variable set |
+
+**Linux:**
+
+```bash
+env | sort
+env QA_ENV=staging ./run-tests.sh
+```
+
+**macOS:** Same commands.
+
+**Release QA use:** Check which environment variables a test run sees, or run
+one command against staging without changing your shell.
+
+**Watch out:** `env` can print tokens and credentials; redact them before
+sharing output.
+
+### `export`
+
+**Day-to-day.** Set an environment variable for the current shell and its child
+processes.
+
+| Usage | What it does |
+|---|---|
+| `export QA_ENV=staging` | Set a variable for child processes |
+| `export PATH="$PATH:/opt/qa/bin"` | Add a directory to the command path |
+| `unset QA_ENV` | Remove the variable |
+
+**Linux:**
+
+```bash
+export QA_ENV=staging
+export PATH="$PATH:/opt/qa/bin"
+unset QA_ENV
+```
+
+**macOS:** Same commands.
+
+**Release QA use:** Point test commands at staging or add a QA tool directory
+to the path for the current session.
+
+**Watch out:** `export` affects the current shell and its children; it does not
+persist after the shell exits.
+
+### PATH
+
+`PATH` is a colon-separated list of directories the shell searches for a
+command. `command -v curl` shows which executable would run, and the order
+matters when two directories contain commands with the same name. Prefer an
+absolute path or an explicit `PATH` update over relying on the ambient order.
+
+### Safe redirection example
+
+```bash
+./run-tests.sh > artifacts/test.log 2>&1; echo $?
+```
+
+This sends both standard output and standard error to the log, then prints the
+exit status. `0` means the script succeeded; a non-zero value means it failed,
+and the log holds the evidence.
