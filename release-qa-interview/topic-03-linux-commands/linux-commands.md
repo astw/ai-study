@@ -125,8 +125,9 @@ whoami
 **Release QA use:** Confirm which user owns a test process or a file before
 changing permissions.
 
-**Watch out:** Under `sudo`, `whoami` prints `root`, not your login user; `id`
-or `logname` shows the original account.
+**Watch out:** Under `sudo`, `whoami` prints `root`, not your login user;
+`logname` or `echo "$SUDO_USER"` shows the original account, while `sudo id`
+still reports root.
 
 ### `id`
 
@@ -258,7 +259,7 @@ of CPU cores.
 |---|---|
 | `-h` | Human-readable sizes |
 | `-T` | Show the filesystem type (Linux) |
-| `-i` | Show inode usage (Linux) |
+| `-i` | Show inode usage |
 
 **Linux:**
 
@@ -268,13 +269,13 @@ df -hT
 df -i
 ```
 
-**macOS:** `df -h` works; `-T` and `-i` are not portable.
+**macOS:** `df -h` and `df -i` work; `-T` (print filesystem type) is Linux-only, while macOS filters with `-t type`.
 
 **Release QA use:** Check free space before downloading a build or writing a
 large log.
 
 **Watch out:** A filesystem can be out of inodes while `df -h` still shows free
-space; check `df -i` on Linux.
+space; check `df -i`.
 
 ### `du`
 
@@ -324,8 +325,8 @@ free -m
 **Release QA use:** Check memory pressure before a load test or after a long
 soak test.
 
-**Watch out:** Linux counts cache as free; read the `available` column, not
-just `free`.
+**Watch out:** Linux uses spare memory for cache, so the `free` column can
+look small; read the `available` column.
 
 ### `ps`
 
@@ -1200,8 +1201,8 @@ in the owning group (`id`), and whether a parent directory is traversable. Use
 
 Use `df`, `du`, and `free` from Part 1. Check `df -h` before a build or a large
 download, `du -sh` on the artifact and log directories when space disappears,
-and `free -h` before a load or soak test. On Linux, `df -i` catches inode
-exhaustion, which looks like a full disk even when space remains.
+and `free -h` before a load or soak test. `df -i` catches inode exhaustion,
+which looks like a full disk even when space remains.
 
 ### `tar`
 
@@ -1239,7 +1240,7 @@ directory.
 
 | Flag | What it does |
 |---|---|
-| `-k` | Keep the original file |
+| `-k` | Keep the original file (GNU only) |
 | `-d` | Decompress |
 | `-9` | Use the best compression |
 
@@ -1250,12 +1251,12 @@ gzip app.log
 gzip -k app.log
 ```
 
-**macOS:** Same commands.
+**macOS:** Basic `gzip` works; `-k` is GNU-only. Use `gzip -c app.log > app.log.gz`, or install GNU gzip with Homebrew.
 
 **Release QA use:** Shrink a large log before attaching it to a bug report.
 
 **Watch out:** `gzip` replaces the original with the `.gz` file unless you use
-`-k`.
+`-k` (GNU) or `gzip -c app.log > app.log.gz` (macOS).
 
 ### `gunzip`
 
@@ -1263,7 +1264,7 @@ gzip -k app.log
 
 | Flag | What it does |
 |---|---|
-| `-k` | Keep the compressed file |
+| `-k` | Keep the compressed file (GNU only) |
 | `-c` | Write to standard output |
 
 **Linux:**
@@ -1273,11 +1274,12 @@ gunzip app.log.gz
 gunzip -k app.log.gz
 ```
 
-**macOS:** Same commands.
+**macOS:** Basic `gunzip` works; `-k` is GNU-only. Use `gunzip -c app.log.gz > app.log`, or install GNU gzip with Homebrew.
 
 **Release QA use:** Read a compressed log without changing the archived copy.
 
-**Watch out:** `gunzip` removes the `.gz` file on success; use `-k` to keep it.
+**Watch out:** `gunzip` removes the `.gz` file on success; use `-k` (GNU) or
+`gunzip -c app.log.gz > app.log` (macOS) to keep it.
 
 ### `zip`
 
