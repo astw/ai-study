@@ -873,3 +873,323 @@ tail -n 1000 /var/log/myapp/app.log \
 `tail` takes the recent window, `grep` keeps error lines, `sort` groups them,
 `uniq -c` counts each group, the second `sort -nr` puts the largest count
 first, and `head` shows the top 20. Every stage is a command in this part.
+
+## Part 4 — Processes and Services
+
+### Finding the process
+
+Use `ps aux` or `ps -ef` from Part 1 to list processes, and `top` from Part 1
+for a live view. The **PID** is the process ID; the **PPID** is its parent. A
+quick way to find a named process is `pgrep -af myapp`, which prints the PID
+and the command line without matching the `pgrep` process itself.
+
+### `kill`
+
+**Frequent.** Send a signal to a process.
+
+| Usage | What it does |
+|---|---|
+| `kill 1234` | Send TERM to PID 1234 |
+| `kill -TERM 1234` | Ask the process to stop cleanly |
+| `kill -9 1234` | Force the process to stop |
+| `kill -l` | List signal names |
+
+**Linux:**
+
+```bash
+kill 1234
+kill -TERM 1234
+kill -9 1234
+```
+
+**macOS:** Same commands.
+
+**Release QA use:** Stop a hung test process, preferring TERM so it can clean
+up, and using KILL only when it will not exit.
+
+**Watch out:** `kill -9` skips cleanup and can leave locks or partial files;
+confirm the PID before you send a signal.
+
+### `jobs`
+
+**Frequent.** List the jobs started from the current shell.
+
+| Flag | What it does |
+|---|---|
+| `-l` | Include PIDs |
+
+**Linux:**
+
+```bash
+jobs
+jobs -l
+```
+
+**macOS:** Same commands.
+
+**Release QA use:** See which background test runs are still active in your
+terminal.
+
+**Watch out:** `jobs` shows only the current shell's jobs, not every process on
+the machine.
+
+### `bg`
+
+**Situational.** Resume a suspended job in the background.
+
+| Usage | What it does |
+|---|---|
+| `bg %1` | Continue job 1 in the background |
+
+**Linux:**
+
+```bash
+bg %1
+```
+
+**macOS:** Same command.
+
+**Release QA use:** Keep a long test run going while you inspect logs in the
+same terminal.
+
+**Watch out:** Job control is interactive only; it does not work the same way
+inside a non-interactive script.
+
+### `fg`
+
+**Situational.** Bring a background or suspended job to the foreground.
+
+| Usage | What it does |
+|---|---|
+| `fg %1` | Bring job 1 to the foreground |
+
+**Linux:**
+
+```bash
+fg %1
+```
+
+**macOS:** Same command.
+
+**Release QA use:** Return to a test run to watch its output after checking
+something else.
+
+**Watch out:** `Ctrl-Z` suspends the current job; use `bg` to continue it in the
+background rather than leaving it stopped.
+
+### `systemctl`
+
+**Day-to-day.** Manage systemd services (Linux only).
+
+| Usage | What it does |
+|---|---|
+| `systemctl status myapp` | Show service state and recent logs |
+| `sudo systemctl restart myapp` | Restart the service |
+| `systemctl is-active myapp` | Print active or inactive |
+
+**Linux:**
+
+```bash
+systemctl status myapp --no-pager
+sudo systemctl restart myapp
+systemctl is-active myapp
+```
+
+**macOS:** Not available; use `launchctl` for services, for example
+`launchctl list | grep myapp`.
+
+**Release QA use:** Check whether the test service is active, restart it after a
+configuration change, and confirm the new state.
+
+**Watch out:** `systemctl` requires systemd; containers often do not run it.
+
+### `journalctl`
+
+**Day-to-day.** Read the systemd journal (Linux only).
+
+| Flag | What it does |
+|---|---|
+| `-u myapp` | Filter to one service |
+| `-f` | Follow new entries |
+| `--since '1 hour ago'` | Limit by time |
+| `-p err` | Show error priority |
+| `-n 100` | Show the last 100 entries |
+| `--no-pager` | Print directly instead of paging |
+
+**Linux:**
+
+```bash
+journalctl -u myapp -n 100 --no-pager
+journalctl -u myapp -f
+journalctl -u myapp --since '1 hour ago' -p err
+```
+
+**macOS:** Use `log show --last 1h` for recent unified logs, or `log stream`
+to follow them.
+
+**Release QA use:** Read a service's logs without knowing which file it writes
+to.
+
+**Watch out:** The journal may be volatile or access-restricted; use `sudo`
+only when the policy allows it.
+
+### Service vs process
+
+A **process** is a running program with a PID. A **service** is a background
+program managed by the init system, such as a systemd unit. One service can
+start several processes. `systemctl status` shows the unit; `ps` shows the
+individual processes.
+
+### Signals
+
+| Signal | Meaning |
+|---|---|
+| `TERM` | Ask the process to stop cleanly |
+| `KILL` | Force the process to stop; it cannot be caught |
+| `HUP` | Hangup; many services reload their configuration |
+| `INT` | Interrupt, usually from `Ctrl-C` |
+| `STOP` / `CONT` | Pause and resume a process |
+
+## Part 5 — Permissions and Ownership
+
+### Reading `ls -l`
+
+A long listing starts with a permission string such as `-rw-r--r--`. The first
+character is the type (`-` file, `d` directory, `l` symlink). The next nine
+characters are three triples: owner, group, and others, each read, write, and
+execute. Then come the owner, group, size, modification time, and name.
+
+For a directory, the execute bit means "can traverse or enter." A file can be
+readable but still unreachable if a parent directory is not executable by your
+user.
+
+### `chmod`
+
+**Day-to-day.** Change permissions.
+
+| Usage | What it does |
+|---|---|
+| `chmod +x run-tests.sh` | Add execute for everyone |
+| `chmod u+x run-tests.sh` | Add execute for the owner |
+| `chmod 644 config.yml` | Owner read/write, group and others read |
+| `chmod 755 run-tests.sh` | Owner read/write/execute, others read/execute |
+
+**Linux:**
+
+```bash
+chmod +x run-tests.sh
+chmod 644 config.yml
+chmod 755 artifacts/run-tests.sh
+```
+
+**macOS:** Same commands.
+
+**Release QA use:** Make a test script executable, or set read-only permissions
+on an artifact that should not change.
+
+**Watch out:** `chmod -R 777` is unsafe; give the minimum permissions the
+process needs.
+
+### `chown`
+
+**Day-to-day.** Change a file's owner, and optionally its group.
+
+| Usage | What it does |
+|---|---|
+| `chown user file` | Change the owner |
+| `chown user:group file` | Change owner and group |
+| `chown -R user:group dir` | Change recursively |
+
+**Linux:**
+
+```bash
+sudo chown "$USER":"$USER" artifacts/app.zip
+sudo chown -R "$USER":"$USER" releases/2026-11-18
+```
+
+**macOS:** Same commands; `$USER` works.
+
+**Release QA use:** Fix ownership after copying artifacts from a container or
+a root-run build job.
+
+**Watch out:** Changing ownership requires root; never chown system paths just
+to make one test pass.
+
+### `chgrp`
+
+**Frequent.** Change a file's group.
+
+| Usage | What it does |
+|---|---|
+| `chgrp qa logs/app.log` | Change the group |
+| `chgrp -R qa logs` | Change recursively |
+
+**Linux:**
+
+```bash
+chgrp qa logs/app.log
+chgrp -R qa logs
+```
+
+**macOS:** Same commands.
+
+**Release QA use:** Give the QA group read access to a log directory.
+
+**Watch out:** You must be a member of the target group, and the group change
+does not add permissions by itself.
+
+### `umask`
+
+**Situational.** Show or set the default permission mask for new files.
+
+| Usage | What it does |
+|---|---|
+| `umask` | Print the current mask |
+| `umask 022` | New files get 644 and directories 755 |
+
+**Linux:**
+
+```bash
+umask
+umask 022
+```
+
+**macOS:** Same commands.
+
+**Release QA use:** Understand why a freshly created log or artifact has the
+permissions it does.
+
+**Watch out:** `umask` subtracts permissions; it never adds them.
+
+### `sudo`
+
+**Day-to-day.** Run a command as another user, usually root.
+
+| Usage | What it does |
+|---|---|
+| `sudo command` | Run as root |
+| `sudo -u user command` | Run as another user |
+| `sudo -l` | List your allowed sudo commands |
+
+**Linux:**
+
+```bash
+sudo systemctl restart myapp
+sudo -u qa cat /var/log/myapp/app.log
+sudo -l
+```
+
+**macOS:** Same commands.
+
+**Release QA use:** Restart a test service or read a root-owned log when the
+environment expects it.
+
+**Watch out:** `sudo` can change files as root and can hide permission problems
+that users will hit; use it only when necessary.
+
+### Permission denied
+
+When a command returns `Permission denied`, check three things: whether your
+user has the needed read, write, or execute bit (`ls -l`), whether your user is
+in the owning group (`id`), and whether a parent directory is traversable. Use
+`sudo` only when the task genuinely requires root.
