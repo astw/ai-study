@@ -198,3 +198,128 @@ the test environment cannot reach it."
   rule; the diagnostic ladder in Part 5 narrows it down.
 - A diagram is a claim, not evidence. Verify the path with commands before
   writing the bug.
+
+## Part 3 — Addressing and Subnetting
+
+### IPv4 addresses
+
+An IPv4 address is 32 bits, written as four decimal octets separated by dots:
+`192.168.1.10`. Each octet is 0–255 because it holds 8 bits. The address has a
+**network** part and a **host** part; the subnet mask decides where the split
+falls.
+
+Special ranges worth memorizing:
+
+| Range | Name | What it means |
+|---|---|---|
+| `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16` | Private | Not routable on the public internet; reused inside networks |
+| `127.0.0.0/8` | Loopback | The local device; `127.0.0.1` is "this machine" |
+| `169.254.0.0/16` | Link-local / APIPA | Self-assigned when DHCP fails; usually a symptom |
+| `224.0.0.0/4` | Multicast | One sender, a group of receivers |
+| `255.255.255.255` | Limited broadcast | Every device on the local network |
+
+A **default gateway** is the router a device sends traffic to when the
+destination is on a different subnet. If the gateway is wrong or missing, local
+traffic may work while everything outside the subnet fails.
+
+### Subnet masks and CIDR
+
+A subnet mask is a run of 1s followed by a run of 0s. CIDR writes the number of
+1s as a suffix: `/24` means 24 network bits and 8 host bits, or
+`255.255.255.0`.
+
+For a `/24`–`/28`, the last mask octet determines the **block size**:
+
+`block size = 256 − last mask octet`
+
+The **network address** has all host bits set to 0. The **broadcast address**
+has all host bits set to 1. The usable range is everything between them:
+
+`usable hosts = block size − 2`
+
+| CIDR | Subnet mask | Block size | Networks in a /24 | Usable hosts |
+|---|---|---|---|---|
+| /24 | 255.255.255.0 | 256 | 1 | 254 |
+| /25 | 255.255.255.128 | 128 | 2 | 126 |
+| /26 | 255.255.255.192 | 64 | 4 | 62 |
+| /27 | 255.255.255.224 | 32 | 8 | 30 |
+| /28 | 255.255.255.240 | 16 | 16 | 14 |
+
+### Step-by-step subnetting
+
+1. Write the prefix and the mask.
+2. Find the block size: `256 − last mask octet`.
+3. List the network addresses in multiples of the block size.
+4. Place the given IP in the network whose block contains it.
+5. First usable = network address + 1.
+6. Broadcast = next network address − 1.
+7. Last usable = broadcast − 1.
+8. Usable hosts = block size − 2.
+
+### A worked /26 example
+
+Take `192.168.1.100/26`.
+
+- Mask `/26` = `255.255.255.192`, because the last octet is
+  `11000000` in binary, or 192.
+- Block size = `256 − 192 = 64`. In binary, 64 is `01000000`, leaving 6 host
+  bits, so `2^6 − 2 = 62` usable hosts.
+- The networks in `192.168.1.0/24` are `.0`, `.64`, `.128`, and `.192`.
+- `.100` falls in the `.64` network, so the network address is
+  `192.168.1.64`.
+- The broadcast is the next network minus one: `192.168.1.127`.
+- The usable range is `192.168.1.65` through `192.168.1.126`.
+
+| Subnet | Network | First usable | Last usable | Broadcast |
+|---|---|---|---|---|
+| 192.168.1.0/26 | 192.168.1.0 | 192.168.1.1 | 192.168.1.62 | 192.168.1.63 |
+| 192.168.1.64/26 | 192.168.1.64 | 192.168.1.65 | 192.168.1.126 | 192.168.1.127 |
+| 192.168.1.128/26 | 192.168.1.128 | 192.168.1.129 | 192.168.1.190 | 192.168.1.191 |
+| 192.168.1.192/26 | 192.168.1.192 | 192.168.1.193 | 192.168.1.254 | 192.168.1.255 |
+| 192.168.1.0/27 | 192.168.1.0 | 192.168.1.1 | 192.168.1.30 | 192.168.1.31 |
+| 192.168.1.32/27 | 192.168.1.32 | 192.168.1.33 | 192.168.1.62 | 192.168.1.63 |
+| 192.168.1.0/28 | 192.168.1.0 | 192.168.1.1 | 192.168.1.14 | 192.168.1.15 |
+| 192.168.1.240/28 | 192.168.1.240 | 192.168.1.241 | 192.168.1.254 | 192.168.1.255 |
+
+### Default gateway, routing, and NAT
+
+If the destination is on the same subnet, the sender uses ARP to find the
+destination's MAC address and sends the frame directly. If the destination is on
+another subnet, the sender sends to the default gateway's MAC address and lets
+the router forward the packet hop by hop.
+
+**NAT** (network address translation) lets many private addresses share one
+public address. It rewrites addresses and ports at the router, which is why an
+outside client cannot start a connection to an inside server without a
+port-forwarding or firewall rule.
+
+For QA, this explains a common pattern: two machines can ping each other on the
+same subnet but fail across subnets because a route or firewall rule is missing.
+It also explains why a service can work from inside the network and time out
+from outside.
+
+### IPv6 basics
+
+IPv6 addresses are 128 bits, written as eight groups of four hexadecimal digits:
+`2001:0db8:0000:0000:0000:ff00:0042:8329`.
+
+Two shortening rules apply:
+
+1. Drop leading zeros in each group: `0db8` becomes `db8`.
+2. Replace one run of all-zero groups with `::`, once per address:
+   `2001:db8::ff00:42:8329`.
+
+Common IPv6 addresses:
+
+| Address | Meaning |
+|---|---|
+| `::1` | Loopback |
+| `::` | Unspecified |
+| `fe80::/10` | Link-local; every interface has one |
+| `2000::/3` | Global unicast, the public address space |
+| `ff00::/8` | Multicast |
+
+IPv6 has no broadcast; it uses multicast instead. It was designed without NAT,
+and hosts can configure themselves with SLAAC or use DHCPv6. For a new-grad
+interview, know the format, the shortening rules, and the main address types;
+advanced IPv6 subnetting is out of scope here.
