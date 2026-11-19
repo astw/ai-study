@@ -86,10 +86,67 @@ tables for the duplicate and orphan exercises.
 No database is bundled with this folder, and no example was executed to produce
 it. There is no SQL Server, MySQL, or PostgreSQL instance in this repository,
 and the expected rows are derived from the fixed sample data, not observed from
-a server. To practice, create the schema and sample rows from Part 1 in a
-database you are authorized to use, run each statement in a scratch database or
-a transaction, and compare the result with the guide's expected rows. Check
-syntax against Microsoft Learn (or another current reference) and against the
-server version you are testing; SQL Server versions differ in features such as
-`CREATE OR ALTER VIEW`. For anything that changes data, use a transaction and
-roll it back, and never point the destructive examples at production.
+a server.
+
+To reproduce a result: create the schema from Part 1, load the exact rows in
+Practice data below (the summary table in Part 1 is not a row-by-row data set),
+and create the two staging tables from Part 11 for the duplicate and orphan
+checks. Run each statement in a scratch database or a transaction and compare
+the result with the guide's expected rows. Check syntax against Microsoft Learn
+(or another current reference) and against the server version you are testing;
+SQL Server versions differ in features such as `CREATE OR ALTER VIEW`. For
+anything that changes data, use a transaction and roll it back, and never point
+the destructive examples at production.
+
+## Practice data
+
+These are the exact rows used by every example and question. `NULL` marks a
+missing value, `TRUE` and `FALSE` are the readable boolean values, and a SQL
+Server `BIT` column stores them as 1 and 0. The timestamps use
+`YYYY-MM-DD hh:mm:ss` in the SQL Server track; the standard track writes each
+as a typed `TIMESTAMP '...'` literal.
+
+`users`:
+
+| user_id | email | display_name | created_at |
+|---:|---|---|---|
+| 1 | alice@example.com | Alice | 2026-01-05 09:00:00 |
+| 2 | bob@example.com | Bob | 2026-01-06 10:00:00 |
+| 3 | carol@example.com | `NULL` | 2026-01-07 11:00:00 |
+| 4 | dave@example.com | Alice | 2026-02-01 12:00:00 |
+| 5 | erin@example.com | Erin | 2026-02-10 13:00:00 |
+
+`decks`:
+
+| deck_id | user_id | title | is_public | created_at |
+|---:|---:|---|---|---|
+| 101 | 1 | Biology 101 | TRUE | 2026-01-10 09:00:00 |
+| 102 | 1 | Spanish Verbs | FALSE | 2026-01-11 09:30:00 |
+| 103 | 2 | Biology 101 | TRUE | 2026-01-12 10:00:00 |
+| 104 | 3 | Empty Deck | FALSE | 2026-02-01 10:00:00 |
+
+`cards`:
+
+| card_id | deck_id | front | back | created_at |
+|---:|---:|---|---|---|
+| 1001 | 101 | What is a cell? | The basic unit of life | 2026-01-15 09:00:00 |
+| 1002 | 101 | What is DNA? | Genetic material | 2026-01-16 09:00:00 |
+| 1003 | 102 | What is the word for book? | el libro | 2026-01-17 09:00:00 |
+| 1004 | 103 | What is osmosis? | Water movement across a membrane | 2026-01-18 09:00:00 |
+| 1005 | 103 | What is a gene? | A unit of heredity | 2026-01-19 09:00:00 |
+
+`reviews`:
+
+| review_id | card_id | user_id | rating | reviewed_at |
+|---:|---:|---:|---:|---|
+| 10001 | 1001 | 1 | 5 | 2026-01-20 09:00:00 |
+| 10002 | 1001 | 2 | 4 | 2026-01-21 10:00:00 |
+| 10003 | 1002 | 1 | `NULL` | 2026-01-22 11:00:00 |
+| 10004 | 1003 | 1 | 3 | 2026-01-23 12:00:00 |
+| 10005 | 1004 | 2 | 5 | 2026-01-24 13:00:00 |
+| 10006 | 1002 | 3 | 2 | 2026-01-25 14:00:00 |
+| 10007 | 1004 | 1 | `NULL` | 2026-02-01 15:00:00 |
+
+Part 11 defines `legacy_users` and `legacy_reviews` with `CREATE TABLE` and
+lists their rows. The exact rows above are the values every expected result in
+the guide and the banks is derived from.

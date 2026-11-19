@@ -4446,6 +4446,30 @@ rows the checks below are built to find.
 | 20003 | 1001 | 9999 | 3 |
 | 20004 | 1002 | 2 | `NULL` |
 
+For practice, create the staging tables with the application's column types.
+They deliberately have no foreign keys and no unique constraint on `email`, so
+the checks below have bad rows to find:
+
+**SQL Server:**
+
+```sql
+CREATE TABLE legacy_users (
+    user_id      INT PRIMARY KEY,
+    email        NVARCHAR(255) NOT NULL,
+    display_name NVARCHAR(100)
+);
+
+CREATE TABLE legacy_reviews (
+    review_id INT PRIMARY KEY,
+    card_id   INT NOT NULL,
+    user_id   INT NOT NULL,
+    rating    INT
+);
+```
+
+**Standard SQL:** replace `INT` with `INTEGER` and `NVARCHAR` with `VARCHAR`;
+nothing else changes.
+
 Users 1 and 3 share `alice@example.com`. Review 20002 names card 9999, which
 does not exist, and review 20003 names user 9999, which does not exist. A
 staging table that accepted those rows has done its job; the import is not
@@ -4824,12 +4848,14 @@ ORDER BY is_public;
 | 0 | 2 |
 | 1 | 2 |
 
-Decks 102 and 104 are private and decks 101 and 103 are public. On SQL Server
-`is_public` is `BIT`, so the group values are 0 and 1; a report should translate
-them to private and public, but the check should group on the column rather than
-on a label the application computes. A release that changes one deck's
-visibility moves one unit from one group to the other and keeps the total at
-four; the total alone would not show it.
+Decks 102 and 104 are private and decks 101 and 103 are public. The expected
+table shows the SQL Server output: on SQL Server `is_public` is `BIT`, so the
+group values are 0 and 1. Under the standard schema the column is `BOOLEAN`, so
+the same two groups display as `FALSE` and `TRUE`. A report should translate
+either form to private and public, but the check should group on the column
+rather than on a label the application computes. A release that changes one
+deck's visibility moves one unit from one group to the other and keeps the total
+at four; the total alone would not show it.
 
 **Ratings.**
 
@@ -4915,10 +4941,13 @@ After the rollback, the same `SELECT` returns four rows with a count of 0. That
 second result is the evidence that the fixtures are gone; keep it with the
 release notes.
 
-The standard form uses `START TRANSACTION` and `ROLLBACK` (Part 7); the inserts
-and the check are the same. A fixture in a transaction is visible only to the
-session that created it. That is a feature for a database check and a limit for
-a browser test: the browser opens another connection and cannot see the
+The standard form uses `START TRANSACTION` and `ROLLBACK` (Part 7). The inserts
+change in two places: `is_public` takes `FALSE` instead of `0`, because the
+standard schema declares it `BOOLEAN` (Part 1), and each `created_at` or
+`reviewed_at` value takes the typed form `TIMESTAMP '2026-02-15 09:00:00'`. The
+check is the same. A fixture in a transaction is visible only to the session
+that created it. That is a feature for a database check and a limit for a
+browser test: the browser opens another connection and cannot see the
 uncommitted rows, so a cross-session test commits the fixtures and then deletes
 them by their reserved keys, child table first, with the same verification
 query at the end (Part 7).
@@ -4940,7 +4969,7 @@ the part that teaches the detail.
 | Review question | What passing looks like | Where |
 |---|---|---|
 | Is the join type correct? | `INNER JOIN` when only matches matter; `LEFT JOIN` when the parent must survive; `FULL OUTER JOIN` when either side may be missing. A `WHERE` predicate on the right table turns a left join into an inner join unless it admits `NULL`. | Part 5 |
-| Is `NULL` handled? | `IS NULL` and `IS NOT NULL`, never `= NULL`; `NOT IN` is not used over a nullable list; aggregates are known to ignore `NULL`; a `NULL` in the result is either a finding or a declared valid state. | Part 3 |
+| Is `NULL` handled? | `IS NULL` and `IS NOT NULL`, never `= NULL`; `NOT IN` is not used when the list or subquery can contain `NULL`; `COUNT(column)` ignores `NULL` while `COUNT(*)` counts rows; a `NULL` in the result is either a finding or a declared valid state. | Part 3 |
 | Can rows multiply? | One-to-many joins are counted with `COUNT(DISTINCT key)` or pre-aggregated before the join; the expected row count is written down and matches the grain of the question. | Parts 4 and 5 |
 | Is each filter in the right clause? | Row conditions in `WHERE`, group conditions in `HAVING`, join conditions in `ON`; an outer join's preserved side is not filtered away in `WHERE`. | Parts 4 and 5 |
 | Is the order deterministic? | `ORDER BY` names every column that matters and ends with a unique tiebreaker; no check depends on the server's default order. | Part 2 |
