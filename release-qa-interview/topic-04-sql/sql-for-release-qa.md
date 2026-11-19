@@ -1913,3 +1913,902 @@ The rules that decide whether a `UNION` runs at all:
   position, aligns columns by position, and takes its labels from the first
   branch. `UNION` removes duplicates and costs more; `UNION ALL` keeps them.
   Choosing the wrong one either hides duplicates or double-counts them.
+
+## Part 6 — Subqueries and Simple CTEs
+
+Parts 2 to 5 built each query from clauses. A **subquery** is a `SELECT`
+statement nested inside another statement, and a **common table expression**
+(CTE) is a named subquery written before the main statement with `WITH`. Both
+let you answer a question in steps. A subquery is usually the right tool for a
+single comparison or an existence check; a CTE is usually the right tool when
+an intermediate result needs a name or is used more than once.
+
+This part covers non-recursive CTEs only. A recursive CTE refers to itself to
+walk a hierarchy, and it is out of scope for this guide and the question
+banks. Every example uses the Part 1 sample rows, and each stated result can
+be traced to those rows; no example was executed.
+
+### Scalar Subqueries
+
+A scalar subquery returns exactly one column and at most one row, so the
+database can use it anywhere a single value is allowed: a comparison, a
+`SELECT` list, or the right-hand side of `SET` in an `UPDATE` (Part 7). If the
+subquery returns more than one row, the statement fails; if it returns no row,
+the value is `NULL`.
+
+The usual QA question is "which rows are above the overall average?"
+
+**SQL Server:**
+
+```sql
+SELECT review_id, rating
+FROM reviews
+WHERE rating > (
+    SELECT AVG(CAST(rating AS DECIMAL(10, 2)))
+    FROM reviews
+);
+```
+
+**Expected rows.** Three rows: reviews 10001 (rating 5), 10002 (4), and 10005
+(5). The subquery returns one value, 3.8: the five non-null ratings sum to 19,
+and the average is 19 / 5. The two `NULL` ratings are excluded from the
+average, and they also fail the outer comparison because `NULL > 3.8` is
+UNKNOWN rather than TRUE (Part 3). The cast matters in SQL Server: `AVG` over
+an `INT` column returns an `INT`, so without it the subquery returns 3. The
+sample happens to select the same three rows at 3, but other data would not.
+The statement is standard SQL as well.
+
+A scalar subquery can also supply a value to every output row:
+
+**SQL Server:**
+
+```sql
+SELECT review_id,
+       rating,
+       (SELECT AVG(CAST(rating AS DECIMAL(10, 2))) FROM reviews) AS overall_avg
+FROM reviews;
+```
+
+This returns seven rows, one per review, with `overall_avg` 3.8 on every row,
+including the two rows whose own `rating` is `NULL`. Because the subquery does
+not refer to the outer `reviews` row, its value does not change from row to
+row. The statement is standard SQL as well.
+
+### IN and EXISTS
+
+`IN (subquery)` is a membership test: the outer value must equal one of the
+values the subquery returns. The subquery must return exactly one column but
+may return any number of rows; duplicates in that list do not duplicate the
+outer rows. `EXISTS (subquery)` is an existence test: it is TRUE when the
+subquery returns at least one row and FALSE when it returns none. The select
+list of an `EXISTS` subquery is ignored, which is why `SELECT 1` is the
+conventional choice.
+
+The first question is "which decks have at least one card?"
+
+**SQL Server:**
+
+```sql
+SELECT deck_id, title
+FROM decks
+WHERE deck_id IN (
+    SELECT deck_id
+    FROM cards
+);
+```
+
+**Expected rows.** Three rows: decks 101 (Biology 101), 102 (Spanish Verbs),
+and 103 (Biology 101). Deck 104 (Empty Deck) is absent because no card names
+it. The inner list is 101, 101, 102, 103, 103; `IN` compares membership, so
+the repeats change nothing. `cards.deck_id` is `NOT NULL`, which keeps this
+form free of the `NULL` trap; Part 3 explains what a `NULL` in the list would
+do to the negated version. The statement is standard SQL as well.
+
+The same question as an existence test:
+
+**SQL Server:**
+
+```sql
+SELECT d.deck_id, d.title
+FROM decks AS d
+WHERE EXISTS (
+    SELECT 1
+    FROM cards AS c
+    WHERE c.deck_id = d.deck_id
+);
+```
+
+**Expected rows.** The same three rows. The inner query refers to `d.deck_id`,
+the outer row, so it is a correlated subquery; for each deck the server checks
+whether at least one card matches. `EXISTS` needs only one matching row, so
+the inner query does not have to count anything and `SELECT 1` means "I only
+need to know whether a row exists". A deck with five cards still produces one
+outer row, because the test is per outer row, not a join. The statement is
+standard SQL as well.
+
+For the empty deck, negate the existence test:
+
+**SQL Server:**
+
+```sql
+SELECT d.deck_id, d.title
+FROM decks AS d
+WHERE NOT EXISTS (
+    SELECT 1
+    FROM cards AS c
+    WHERE c.deck_id = d.deck_id
+);
+```
+
+**Expected rows.** One row: deck 104, Empty Deck. `NOT EXISTS` is TRUE when
+the inner query returns no row. A `NULL` inside the inner comparison is
+UNKNOWN, which does not count as a match, so `NOT EXISTS` remains TRUE for a
+deck that truly has no cards. That property makes it the safe form for
+absence checks. The equivalent `NOT IN` query returns the same row here:
+
+**SQL Server:**
+
+```sql
+SELECT deck_id, title
+FROM decks
+WHERE deck_id NOT IN (
+    SELECT deck_id
+    FROM cards
+);
+```
+
+It is safe only because `cards.deck_id` is `NOT NULL`. If the subquery column
+could be `NULL`, the `NOT IN` version would return zero rows (Part 3), and a
+zero-row "no empty decks" result would be a false clean result. Both
+statements are standard SQL.
+
+### Correlated Subqueries
+
+A **correlated subquery** references a column from the outer query, so its
+result can differ for every outer row. The server may rewrite the query into a
+join internally, but the mental model is: for each outer row, run the inner
+query with that row's values. The latest review per card is the standard
+example.
+
+**SQL Server:**
+
+```sql
+SELECT r.review_id, r.card_id, r.rating, r.reviewed_at
+FROM reviews AS r
+WHERE r.reviewed_at = (
+    SELECT MAX(r2.reviewed_at)
+    FROM reviews AS r2
+    WHERE r2.card_id = r.card_id
+)
+ORDER BY r.card_id, r.review_id;
+```
+
+**Expected rows.** Four rows: review 10002 for card 1001 (rating 4), review
+10006 for card 1002 (rating 2), review 10004 for card 1003 (rating 3), and
+review 10007 for card 1004 (rating `NULL`). The inner query computes the
+latest `reviewed_at` for the card named by the current outer row, so an outer
+row survives only when it is that card's latest. Card 1005 has no reviews and
+does not appear. Review 10007 shows that the latest review does not need a
+rating; the query filters on time, not on `rating`. If two reviews share the
+latest timestamp, both survive, because `MAX` returns a value, not a single
+row identity. Add a deterministic tiebreaker, or use `ROW_NUMBER` (Part 9),
+when the check expects exactly one row. The statement is standard SQL as well.
+
+The same correlated shape answers "which cards have no reviews?"
+
+**SQL Server:**
+
+```sql
+SELECT c.card_id, c.front
+FROM cards AS c
+WHERE NOT EXISTS (
+    SELECT 1
+    FROM reviews AS r
+    WHERE r.card_id = c.card_id
+);
+```
+
+**Expected rows.** One row: card 1005, "What is a gene?". Cards 1001, 1002,
+1003, and 1004 each have at least one review. Here the correlation is the
+`c.card_id` reference inside the inner `WHERE`; `NOT EXISTS` is TRUE only when
+no review matches the current card. The statement is standard SQL as well.
+
+### Simple CTEs
+
+A common table expression (CTE) gives a name to a subquery and places it
+before the statement that uses it. The shape is `WITH name AS (query)`
+followed by the main statement. The name exists for one statement: it can be
+used anywhere in the statement that follows, including more than once, and it
+is gone when that statement ends. This guide and the question banks use
+non-recursive CTEs only; a recursive CTE that refers to itself is out of
+scope.
+
+The reference example counts cards per deck and keeps empty decks:
+
+**SQL Server:**
+
+```sql
+WITH deck_card_counts AS (SELECT deck_id, COUNT(*) AS card_count FROM cards GROUP BY deck_id) SELECT d.title, COALESCE(c.card_count, 0) AS card_count FROM decks AS d LEFT JOIN deck_card_counts AS c ON c.deck_id = d.deck_id;
+```
+
+**Expected rows.** Four rows, in no particular order because the statement has
+no `ORDER BY` (Part 2): Biology 101 with 2, Spanish Verbs with 1, Biology 101
+with 2, and Empty Deck with 0. The CTE groups `cards` by `deck_id` and returns
+101 → 2, 102 → 1, and 103 → 2; deck 104 has no row in that result. The
+`LEFT JOIN` starts from `decks`, so deck 104 survives, and `COALESCE` turns
+its `NULL` count into 0. Two rows show the title Biology 101, because decks
+101 and 103 share that title (Part 1); the statement selects only the title,
+so the report cannot tell them apart. Select `d.deck_id` as well when each row
+must be identifiable. The statement is standard SQL as well; the one-line
+layout above is the reference form, and the same statement can be wrapped
+across lines without changing its meaning.
+
+In SQL Server, the statement before a `WITH` must end with a semicolon. A
+missing terminator produces a syntax error near the word `with` that points at
+the wrong statement, so end the previous statement explicitly.
+
+### Multiple CTEs
+
+A single `WITH` clause may define several CTEs, separated by commas. Later
+definitions can refer to earlier ones, and the main statement can use any of
+them. Multiple CTEs keep separate aggregates separate: each one is computed
+from its own tables before the joins combine them.
+
+**SQL Server:**
+
+```sql
+WITH card_counts AS (
+    SELECT deck_id, COUNT(*) AS card_count
+    FROM cards
+    GROUP BY deck_id
+),
+review_counts AS (
+    SELECT c.deck_id, COUNT(*) AS review_count
+    FROM cards AS c
+    INNER JOIN reviews AS r ON r.card_id = c.card_id
+    GROUP BY c.deck_id
+)
+SELECT d.deck_id,
+       d.title,
+       COALESCE(cc.card_count, 0) AS card_count,
+       COALESCE(rc.review_count, 0) AS review_count
+FROM decks AS d
+LEFT JOIN card_counts  AS cc ON cc.deck_id = d.deck_id
+LEFT JOIN review_counts AS rc ON rc.deck_id = d.deck_id
+ORDER BY d.deck_id;
+```
+
+**Expected rows.** Four rows:
+
+| deck_id | title | card_count | review_count |
+|---:|---|---:|---:|
+| 101 | Biology 101 | 2 | 4 |
+| 102 | Spanish Verbs | 1 | 1 |
+| 103 | Biology 101 | 2 | 2 |
+| 104 | Empty Deck | 0 | 0 |
+
+`card_counts` produces 101 → 2, 102 → 1, and 103 → 2, as before.
+`review_counts` groups the reviews by the deck of their card: deck 101 has
+cards 1001 and 1002, which carry reviews 10001, 10002, 10003, and 10006, so 4;
+deck 102 has card 1003 with review 10004, so 1; deck 103 has card 1004 with
+reviews 10005 and 10007, so 2, and card 1005 contributes nothing because it
+has no reviews. The inner join in `review_counts` drops card 1005 and deck
+104, and the grouping then counts reviews per deck. Each CTE returns at most
+one row per deck, so the two left joins cannot multiply rows: this is the
+pre-aggregate-then-join shape from Part 5 with names instead of nested tables.
+The `COALESCE` calls give deck 104 zeros instead of the `NULL`s that a left
+join would supply. If the second CTE needed the first, it could reference
+`card_counts` by name, because definitions are read in order within the same
+`WITH` clause. The statement is standard SQL as well.
+
+### CTE vs Subquery
+
+The simple CTE and a nested subquery answer the same question with the same
+result. The nested form puts the aggregate in the `FROM` clause as a derived
+table:
+
+**SQL Server:**
+
+```sql
+SELECT d.title,
+       COALESCE(c.card_count, 0) AS card_count
+FROM decks AS d
+LEFT JOIN (
+    SELECT deck_id, COUNT(*) AS card_count
+    FROM cards
+    GROUP BY deck_id
+) AS c ON c.deck_id = d.deck_id;
+```
+
+**Expected rows.** The same four rows: Biology 101 with 2, Spanish Verbs with
+1, Biology 101 with 2, and Empty Deck with 0. The two statements differ in
+structure, not result. The CTE's real gain is the name: `deck_card_counts`
+says what the intermediate rows mean, while the derived table is only `c`.
+
+| Question | CTE | Nested subquery |
+|---|---|---|
+| Where does the intermediate query appear? | Before the main statement, under a name | Inside `FROM`, as a derived table |
+| Does it need an alias? | The CTE name is the alias | Yes, the derived table needs `c` or `AS c` |
+| Can the main statement use it more than once? | Yes, by name | Only by writing it again |
+| How does it read? | Top-down: define, then use | Inside-out: read the nesting |
+| Does it guarantee one evaluation? | No | No |
+
+The last row is the one QA checks most often get wrong. A CTE is not a
+materialized result. In SQL Server the optimizer generally expands the CTE
+into the statement as if it were the equivalent subquery, so referencing it
+twice can mean evaluating it twice, and a CTE alone is not a performance
+improvement. If an expensive intermediate result must be computed once, store
+it in a table or restructure the query; a CTE or a plain view is only a name
+(Part 8 returns to views, and Part 10 covers tuning).
+
+The nested form is standard SQL as well, as is the CTE form. In SQL Server the
+derived table in `FROM` needs an alias; a CTE at the top level uses its own
+name instead.
+
+### Release QA Use
+
+- Turn each acceptance question into the smallest subquery that answers it.
+  "Which decks have cards?" is `IN` or `EXISTS`; "which decks have none?" is
+  `NOT EXISTS`. A zero-row result from the wrong form is a false clean result,
+  not evidence.
+- Use a scalar subquery when one row must be compared with a table-wide
+  baseline, such as a rating against the overall average. The `NULL` handling
+  of the aggregate applies before the outer comparison.
+- Use a correlated subquery for a per-group question such as the latest review
+  per card. State what should happen on a tie, and add a tiebreaker when the
+  check expects exactly one row.
+- Name intermediate results with CTEs when a check has several steps. Each CTE
+  is a step you can describe in the bug report, and multiple CTEs keep card
+  counts and review counts separate so neither join multiplies the other.
+- Remember that a CTE lives for one statement. If a result must feed a second
+  check, run the statement again or store the result; the name does not
+  survive.
+- Do not treat a CTE as an optimization. Measure the plan and the reads
+  (Part 10) before claiming that a rewrite made a check faster.
+
+### Watch-outs
+
+- A CTE is not a temp table. It stores no rows of its own, has no index or
+  statistics of its own, and has no life beyond the statement that defines
+  it.
+- The scope of a CTE ends at the end of its statement. The next statement
+  cannot reference the name, even in the same batch.
+- A CTE referenced twice may be evaluated twice. SQL Server generally expands
+  it into the statement, so a CTE is a naming device, not a cache and not a
+  materialized intermediate result.
+- Recursive CTEs are out of scope for this guide and the question banks. Every
+  `WITH` example here is non-recursive.
+- A scalar subquery must return one column and at most one row. More rows
+  raise an error; zero rows produce `NULL`, which can silently turn a
+  comparison into UNKNOWN.
+- `NOT IN` over a subquery column that can be `NULL` returns no rows. Use
+  `NOT EXISTS`, or filter the inner column with `IS NOT NULL`.
+- `EXISTS` ignores the select list; `SELECT 1` states the intent. A correlated
+  subquery can be slow when it runs per outer row, so compare it with a join
+  when the table is large (Part 10).
+- A latest-per-group subquery returns every row tied for the maximum. Add a
+  unique tiebreaker when the check expects one row per group.
+- In SQL Server, the statement before a `WITH` must end with a semicolon; a
+  missing terminator produces a misleading syntax error near `with`.
+
+## Part 7 — Changing Data and Transactions
+
+Parts 2 to 6 read data. This part changes it. `INSERT` adds rows, `UPDATE`
+changes values, and `DELETE` removes rows. Each statement has to answer three
+questions before it runs: which rows does it touch, what changes, and how do
+you undo it if the answer is wrong. **Autocommit** is the default in SQL
+Server and in most databases: each statement is its own transaction and is
+saved as soon as it succeeds. That is why an `UPDATE` without a `WHERE` is not
+an experiment; it is a permanent change to every row.
+
+A **transaction** groups statements so they can all be saved or all undone.
+This part shows the SQL Server forms first and the standard SQL forms second.
+Each example starts from the Part 1 sample rows and is independent of the
+others; the statements would change those rows if run, and none was executed
+here.
+
+### INSERT
+
+`INSERT INTO table (columns) VALUES (values)` adds one row. The column list
+and the value list must have the same length and compatible types, and each
+value is assigned to the column in the same position.
+
+**SQL Server:**
+
+```sql
+INSERT INTO users (user_id, email, display_name, created_at)
+VALUES (6, 'frank@example.com', 'Frank', '2026-02-15 09:00:00');
+```
+
+**Expected effect.** User 6 is added. The column list names all four columns;
+`display_name` is nullable, so it could be omitted and would then be `NULL`,
+but the three `NOT NULL` columns must be supplied. `user_id` is written
+explicitly because the schema has no identity or default on it (Part 1); a
+table that generates its own keys would omit it.
+
+**Standard SQL:**
+
+```sql
+INSERT INTO users (user_id, email, display_name, created_at)
+VALUES (6, 'frank@example.com', 'Frank', TIMESTAMP '2026-02-15 09:00:00');
+```
+
+The shape is the same; standard SQL adds a typed `TIMESTAMP` literal.
+
+The column list is not optional for safe work. `INSERT INTO users VALUES (...)`
+depends on the column order in the table. Add a column, or change the order in
+a migration, and the statement either fails or writes values into the wrong
+columns. Always name the columns.
+
+`INSERT ... SELECT` adds one row per row the query returns. It is how a QA
+script copies, transforms, or stages data without listing values one at a
+time.
+
+**SQL Server:**
+
+```sql
+INSERT INTO decks (deck_id, user_id, title, is_public, created_at)
+SELECT 200 + user_id, user_id, 'Welcome Deck', 0, '2026-02-15 09:00:00'
+FROM users
+WHERE user_id IN (4, 5);
+```
+
+**Expected effect.** Two rows are inserted: deck 204 for user 4 and deck 205
+for user 5. The `SELECT` returns two rows, and each becomes one insert; the
+expression `200 + user_id` derives keys in a reserved QA range, away from the
+sample decks 101 to 104. `is_public` is `BIT`, so `0` means `FALSE` (Part 1).
+
+**Standard SQL:**
+
+```sql
+INSERT INTO decks (deck_id, user_id, title, is_public, created_at)
+SELECT 200 + user_id,
+       user_id,
+       'Welcome Deck',
+       FALSE,
+       TIMESTAMP '2026-02-15 09:00:00'
+FROM users
+WHERE user_id IN (4, 5);
+```
+
+The standard form differs in the boolean literal and uses a typed `TIMESTAMP`
+literal.
+
+A constraint can reject the whole statement. This negative-test insert tries
+to record a rating of 6:
+
+**SQL Server:**
+
+```sql
+INSERT INTO reviews (review_id, card_id, user_id, rating, reviewed_at)
+VALUES (10008, 1005, 1, 6, '2026-02-15 09:00:00');
+```
+
+The check constraint `ck_reviews_rating` allows a non-null rating only between
+1 and 5 (Part 1), so the statement is rejected and no row is added. SQL Server
+reports a check-constraint conflict as error 547, and the message names the
+constraint, the table, and the column. The other constraints reject other
+mistakes in the same way: a `card_id` of 9999 violates `fk_reviews_card`, a
+`user_id` of 99 violates `fk_reviews_user`, a duplicate `review_id` violates
+the primary key, and a missing `NOT NULL` value violates that column's rule
+(SQL Server error 515). Standard SQL describes the same classes with SQLSTATE
+codes such as 23514 (check), 23503 (foreign key), 23505 (unique), and 23502
+(not null).
+
+Error text is evidence. A bug report that says "the API could not save the
+review" is weaker than one that records the constraint name, the rejected
+value, and the server's message. The exact text varies by product and version,
+so quote it rather than paraphrasing.
+
+Because one statement is atomic, a multi-row `INSERT ... SELECT` that hits one
+bad row stores none of its rows. Validate the source query and its constraints
+before running the insert, and compare the affected-row count with the count
+the `SELECT` alone returned.
+
+### UPDATE
+
+`UPDATE table SET column = value WHERE condition` changes the matching rows.
+The `WHERE` clause uses the same rules as a `SELECT` filter (Part 3); without
+it, every row matches.
+
+**SQL Server:**
+
+```sql
+UPDATE reviews
+SET rating = 5
+WHERE review_id = 10002;
+```
+
+**Expected effect.** Review 10002 changes from 4 to 5; one row is affected.
+The other six reviews keep their values. The statement is standard SQL as
+well.
+
+Now remove the `WHERE`:
+
+**SQL Server:**
+
+```sql
+UPDATE reviews
+SET rating = 5;
+```
+
+**Expected effect.** Every row in `reviews` gets a rating of 5: seven rows are
+affected, including reviews 10003 and 10007, whose `NULL` ratings are
+replaced. The original distribution is gone. Under autocommit the change is
+permanent; outside a transaction there is no statement-level undo. This is the
+single most destructive typo in SQL, and it is the reason the next paragraph
+exists.
+
+Before an `UPDATE`, run its `WHERE` as a `SELECT`:
+
+**SQL Server:**
+
+```sql
+SELECT COUNT(*)
+FROM reviews
+WHERE review_id = 10002;
+```
+
+The count is the number of rows the update should affect. Run the update, then
+compare the affected-row message with the count. `(1 row affected)` matches;
+`(0 rows affected)` means the `WHERE` matched nothing; `(7 rows affected)`
+means the `WHERE` was too broad or was never applied. On SQL Server the same
+count is available as `@@ROWCOUNT` immediately after the statement. The
+statement is standard SQL.
+
+An `UPDATE` can take its row set from a subquery, which is how one change
+targets the children of a selected parent:
+
+**SQL Server:**
+
+```sql
+UPDATE reviews
+SET rating = 5
+WHERE card_id IN (
+    SELECT card_id
+    FROM cards
+    WHERE deck_id = 101
+);
+```
+
+**Expected effect.** Four rows change: reviews 10001, 10002, 10003, and 10006,
+the reviews on cards 1001 and 1002 in deck 101. The subquery returns the
+deck's card IDs, and `IN` selects the reviews that name one of them.
+`cards.card_id` is the primary key and cannot be `NULL`, so the membership
+test has no `NULL` trap. The statement is standard SQL as well.
+
+### DELETE
+
+`DELETE FROM table WHERE condition` removes the matching rows. The table and
+its columns remain; only the rows go.
+
+**SQL Server:**
+
+```sql
+DELETE FROM reviews
+WHERE rating IS NULL;
+```
+
+**Expected effect.** Two rows are deleted: reviews 10003 and 10007, the two
+reviews with no rating. The predicate is `IS NULL`, not `= NULL`, because a
+comparison with `NULL` is UNKNOWN and would delete nothing (Part 3). The
+statement is standard SQL as well.
+
+Without a `WHERE`, `DELETE` empties the table:
+
+**SQL Server:**
+
+```sql
+DELETE FROM reviews;
+```
+
+**Expected effect.** All seven rows are deleted. The table still exists, and
+its constraints and columns are unchanged, but it holds no rows. Under
+autocommit the change is permanent. `DELETE` removes rows; it does not remove
+the table, which is DDL (Part 8).
+
+A subquery decides which rows to delete. This is the shape used to tear down
+test data in foreign-key order:
+
+**SQL Server:**
+
+```sql
+DELETE FROM reviews
+WHERE card_id IN (
+    SELECT card_id
+    FROM cards
+    WHERE deck_id = 102
+);
+```
+
+**Expected effect.** One row is deleted: review 10004, the only review on card
+1003 in deck 102. To remove deck 102 completely, the order is reviews, then
+cards, then the deck. Each child table points at its parent with a foreign
+key, so deleting a parent first is rejected while matching children remain.
+The statement is standard SQL as well.
+
+The same shape has a `NULL` trap when the subquery column is nullable. A
+`DELETE ... WHERE card_id NOT IN (SELECT ...)` over a nullable column deletes
+zero rows, because `NOT IN` is UNKNOWN for every row. If the check is a
+cleanup that depends on `NOT IN`, a zero-row result can look like success
+while the rows remain. Use `NOT EXISTS` or make the subquery return no `NULL`
+values.
+
+### Transactions
+
+A transaction is a unit of work that ends in either `COMMIT` or `ROLLBACK`.
+`COMMIT` makes every change in the transaction permanent; `ROLLBACK` undoes
+every change back to the start of the transaction, or back to a savepoint
+(below). If the connection closes or the server fails mid-transaction, the
+unfinished transaction rolls back. That all-or-nothing rule is why a test
+setup can be discarded as one unit. A transaction belongs to one connection,
+so another session cannot join it or see its uncommitted rows.
+
+SQL Server first. `BEGIN TRANSACTION` starts a transaction, and `UPDATE`,
+`DELETE`, and `INSERT` after it belong to that transaction until `COMMIT` or
+`ROLLBACK`.
+
+**SQL Server:**
+
+```sql
+BEGIN TRANSACTION;
+
+UPDATE reviews
+SET rating = 5
+WHERE review_id = 10002;
+
+SELECT review_id, rating
+FROM reviews
+WHERE review_id = 10002;
+
+ROLLBACK TRANSACTION;
+```
+
+**Expected effect.** The `SELECT` inside the transaction shows review 10002
+with rating 5, because a transaction sees its own changes. The `ROLLBACK`
+then undoes the update, and review 10002 holds rating 4 again. Other sessions
+do not see the uncommitted 5, and the open transaction can hold locks that
+block them, so keep transactions short and always close them.
+
+To keep the change instead, commit it:
+
+**SQL Server:**
+
+```sql
+BEGIN TRANSACTION;
+
+INSERT INTO users (user_id, email, display_name, created_at)
+VALUES (6, 'frank@example.com', 'Frank', '2026-02-15 09:00:00');
+
+COMMIT TRANSACTION;
+```
+
+**Expected effect.** User 6 is added and stays added. `COMMIT` ends the
+transaction; a later `ROLLBACK` cannot undo it. SQL Server accepts
+`COMMIT TRANSACTION`, `COMMIT TRAN`, and `COMMIT`; `ROLLBACK TRANSACTION` and
+`ROLLBACK` are both accepted, while the `BEGIN` form needs `TRANSACTION` or
+`TRAN`.
+
+The standard SQL forms are different words for the same steps:
+
+**Standard SQL:**
+
+```sql
+START TRANSACTION;
+
+UPDATE reviews
+SET rating = 5
+WHERE review_id = 10002;
+
+ROLLBACK;
+```
+
+and to keep the work:
+
+**Standard SQL:**
+
+```sql
+START TRANSACTION;
+
+INSERT INTO users (user_id, email, display_name, created_at)
+VALUES (6, 'frank@example.com', 'Frank', TIMESTAMP '2026-02-15 09:00:00');
+
+COMMIT;
+```
+
+Standard SQL uses `START TRANSACTION`, `COMMIT`, and `ROLLBACK`; it does not
+use SQL Server's `BEGIN TRANSACTION`. The words are not interchangeable across
+products: some databases accept `BEGIN` as a synonym, but a statement that
+starts with `BEGIN TRANSACTION` is T-SQL syntax, and one that starts with
+`START TRANSACTION` is the standard form.
+
+**Test-data cleanup.** The safe pattern for a check that runs in one session
+is to create the fixtures and discard them with the transaction that created
+them:
+
+**SQL Server:**
+
+```sql
+BEGIN TRANSACTION;
+
+-- Setup
+INSERT INTO users (user_id, email, display_name, created_at)
+VALUES (900, 'qa@example.com', 'QA User', '2026-02-15 09:00:00');
+
+INSERT INTO decks (deck_id, user_id, title, is_public, created_at)
+VALUES (900, 900, 'QA Deck', 0, '2026-02-15 09:00:00');
+
+-- The check runs here, in the same session.
+
+ROLLBACK TRANSACTION;
+```
+
+**Expected effect.** The setup rows exist while the check runs and are gone
+after the rollback; no fixture is left behind. The same-session condition is
+part of the pattern: another connection cannot see uncommitted rows under the
+default isolation level, and a UI test running in a browser session is another
+connection. For a cross-session test, commit the setup, run the test, and then
+remove the rows by their known keys in child-to-parent order, checking the
+counts afterward:
+
+**SQL Server:**
+
+```sql
+BEGIN TRANSACTION;
+
+DELETE FROM decks
+WHERE deck_id = 900;
+
+DELETE FROM users
+WHERE user_id = 900;
+
+COMMIT;
+```
+
+The deck must go before the user because `fk_decks_user` points from the deck
+to the user. A cleanup that deletes nothing and a cleanup that succeeds both
+return without an error; a `SELECT COUNT(*) ... WHERE user_id = 900` that
+returns 0 is the evidence that the rows are gone.
+
+**Shared environments.** A transaction protects a change only until it is
+committed, and it does not protect other people from your locks. On a shared
+test server another tester can read, change, or delete the same rows, and a
+`ROLLBACK` cannot recover work that was committed outside your transaction.
+Before any destructive statement in a shared environment, get approval and
+confirm which environment you are connected to. Prefer a dedicated database or
+schema; run the `SELECT` scope check first; keep the statement in a
+transaction; and commit only the change the test is meant to produce. A
+production database should not grant a QA account write access at all; if one
+does, that is a finding.
+
+A constraint error inside a transaction has its own trap. In SQL Server the
+invalid statement is rolled back, but by default the transaction stays open.
+The error is reported, the connection still holds the transaction and its
+locks, and the next statement runs inside that transaction. After any error,
+roll back deliberately (or commit the valid earlier work), and read the error
+text before retrying. Some products abort the whole transaction on a statement
+error; SQL Server's default is the statement-level behavior, so do not assume
+another database behaves the same way.
+
+### Savepoints
+
+A savepoint is a named marker inside a transaction. Rolling back to it undoes
+only the work done after the marker; earlier work stays, and the transaction
+is still open. It is not a commit.
+
+**SQL Server:**
+
+```sql
+BEGIN TRANSACTION;
+
+INSERT INTO users (user_id, email, display_name, created_at)
+VALUES (6, 'frank@example.com', 'Frank', '2026-02-15 09:00:00');
+
+SAVE TRANSACTION after_user_insert;
+
+UPDATE decks
+SET is_public = 1
+WHERE deck_id = 104;
+
+ROLLBACK TRANSACTION after_user_insert;
+
+COMMIT TRANSACTION;
+```
+
+**Expected effect.** The update of deck 104 is undone, so deck 104 is private
+again (`is_public` 0, its Part 1 value), while user 6 is committed and remains.
+`SAVE TRANSACTION` defines the marker; `ROLLBACK TRANSACTION after_user_insert`
+undoes everything after it; the transaction is still active, and the final
+`COMMIT` keeps the insert. If the final `COMMIT` were
+replaced by `ROLLBACK`, user 6 would be removed too.
+
+The standard form uses `SAVEPOINT` and `ROLLBACK TO SAVEPOINT`:
+
+**Standard SQL:**
+
+```sql
+START TRANSACTION;
+
+INSERT INTO users (user_id, email, display_name, created_at)
+VALUES (6, 'frank@example.com', 'Frank', TIMESTAMP '2026-02-15 09:00:00');
+
+SAVEPOINT after_user_insert;
+
+UPDATE decks
+SET is_public = TRUE
+WHERE deck_id = 104;
+
+ROLLBACK TO SAVEPOINT after_user_insert;
+
+COMMIT;
+```
+
+**Expected effect.** The same outcome: the deck update is undone and user 6 is
+kept. `SAVEPOINT name` creates the marker; `ROLLBACK TO SAVEPOINT name` undoes
+work after it; the transaction remains open until `COMMIT`. Standard SQL also
+has `RELEASE SAVEPOINT name`, which discards a marker without undoing its
+work. SQL Server has no `RELEASE SAVEPOINT`; its savepoints disappear when the
+transaction ends.
+
+Do not use a second `BEGIN TRANSACTION` as a savepoint. SQL Server counts
+nested `BEGIN TRANSACTION` calls, and an inner `COMMIT` only decrements the
+count; it does not make the work permanent, and `ROLLBACK` without a savepoint
+undoes the whole transaction. `SAVE TRANSACTION` is the tool for undoing part
+of a transaction.
+
+### Release QA Use
+
+- Run every change as a loop: `SELECT` the scope and count it, predict the
+  affected count, run the change, compare the affected-row message, verify the
+  new state with another `SELECT`, and clean up. Each step produces evidence
+  for the report.
+- Build fixtures with explicit keys in a reserved range, such as users and
+  decks 900 or above, so test rows are easy to find and remove and cannot
+  collide with sample or production-like rows.
+- Clean up in child-to-parent order: reviews, then cards, then decks, then
+  users. A parent delete is rejected while children remain; a child delete
+  first is the ordinary foreign-key-safe order.
+- Wrap multi-statement changes in a transaction so the whole change is saved
+  or undone. When the check runs in the same session, roll back the setup to
+  leave no fixtures; when another connection runs the test, commit the setup
+  and delete it by key afterward.
+- Use a savepoint when a multi-step check must undo one step but keep the
+  earlier setup. A second `BEGIN TRANSACTION` is not a savepoint in SQL
+  Server.
+- Treat constraint errors as test results. Record the error number or
+  SQLSTATE, the constraint name, the table, the rejected value, and the
+  server's message; a negative test passes when it gets exactly that rejection.
+- Never run destructive statements on a shared or production environment
+  without written approval and a verified scope. Prefer a dedicated test
+  database, take a backup or snapshot when the environment allows it, and
+  leave write access off the QA account when it is not required.
+
+### Watch-outs
+
+- `UPDATE` and `DELETE` without `WHERE` touch every row. Autocommit makes the
+  change permanent; outside a transaction there is no statement-level undo.
+- The affected-row count is evidence. `(0 rows affected)` often means the
+  `WHERE` matched nothing through a wrong key, a `NULL`, or a type mismatch;
+  an unexpectedly large count means the `WHERE` was too broad.
+- `DELETE` with `NOT IN` over a nullable subquery deletes nothing. Use
+  `NOT EXISTS` or filter the inner column; a zero-row delete is not proof the
+  data was clean.
+- Delete children before parents. A foreign key rejects a parent delete while
+  matching children remain, and the error text names the relationship.
+- A transaction stays open until `COMMIT` or `ROLLBACK`. An open transaction
+  holds locks, blocks other sessions, and hides its changes from them; close it
+  even after an error.
+- A constraint violation rejects the statement; in SQL Server the transaction
+  can stay open by default. Read the error text and roll back deliberately.
+- A savepoint is not a commit. `ROLLBACK TRANSACTION marker` keeps earlier
+  work but the transaction remains open; a final `COMMIT` or `ROLLBACK` is
+  still required.
+- `INSERT INTO table VALUES (...)` without a column list depends on column
+  order. A schema change can break the statement or put values in the wrong
+  columns.
+- A multi-row `INSERT ... SELECT` that violates one constraint inserts no
+  rows: the statement is rejected as a unit. Validate and count the source
+  rows before the insert.
+- Cleanup must be verified. Run `SELECT COUNT(*)` after cleanup and expect
+  zero rows; a cleanup that deleted nothing looks the same as a successful one
+  otherwise.
