@@ -4413,3 +4413,646 @@ needs its own measurement.
   Covering is a property of one query, not of the index.
 - A function, a cast, or a type mismatch on the indexed column prevents a
   seek; check the plan for the conversion and align the types.
+
+## Part 11 — Release QA Query Patterns
+
+Parts 1 to 10 taught the language one feature at a time. This part turns those
+features into repeatable release checks: a baseline count, a duplicate scan, an
+orphan scan, a null audit, a before-and-after comparison, a distribution, a
+disposable fixture, a saved view, and a review of the query itself. Each check
+has the same four parts: the question it answers, the query, the rows expected
+on the sample data, and the decision rule for a release.
+
+Two QA staging tables stand in for an import file. They are not part of the
+application schema, and the database does not enforce the application's foreign
+keys or uniqueness rules on them, which is exactly why they can hold the bad
+rows the checks below are built to find.
+
+`legacy_users(user_id, email, display_name)`:
+
+| user_id | email | display_name |
+|---:|---|---|
+| 1 | alice@example.com | Alice |
+| 2 | bob@example.com | Bob |
+| 3 | alice@example.com | Alice |
+| 4 | carol@example.com | Carol |
+
+`legacy_reviews(review_id, card_id, user_id, rating)`:
+
+| review_id | card_id | user_id | rating |
+|---:|---:|---:|---:|
+| 20001 | 1001 | 1 | 5 |
+| 20002 | 9999 | 1 | 4 |
+| 20003 | 1001 | 9999 | 3 |
+| 20004 | 1002 | 2 | `NULL` |
+
+Users 1 and 3 share `alice@example.com`. Review 20002 names card 9999, which
+does not exist, and review 20003 names user 9999, which does not exist. A
+staging table that accepted those rows has done its job; the import is not
+trusted until the checks below pass.
+
+### Baseline Counts
+
+A release baseline starts with one question per table: how many rows does the
+table hold now? Run the same query before the deployment and after it, and keep
+both results with the build identifier and the time each ran.
+
+**SQL Server and standard SQL:**
+
+```sql
+SELECT 'users' AS table_name, COUNT(*) AS row_count FROM users
+UNION ALL
+SELECT 'decks', COUNT(*) FROM decks
+UNION ALL
+SELECT 'cards', COUNT(*) FROM cards
+UNION ALL
+SELECT 'reviews', COUNT(*) FROM reviews
+ORDER BY table_name;
+```
+
+**Expected results.** The same four rows both times, because the sample data
+does not change during a release:
+
+| table_name | before | after |
+|---|---:|---:|
+| cards | 5 | 5 |
+| decks | 4 | 4 |
+| reviews | 7 | 7 |
+| users | 5 | 5 |
+
+`COUNT(*)` counts rows, not non-`NULL` values (Part 4). The sum of the four
+counts is not a meaningful total across different entities; each row is its own
+baseline. Run the query in every environment you are comparing, because a test
+environment with different sample data cannot be compared row for row with
+production.
+
+**Decision rule.** Equal counts before and after are necessary, not sufficient.
+A release that moves a card from one deck to another keeps the `cards` count at
+5 while changing deck 101 and deck 103; a release that deletes one review and
+inserts another keeps `reviews` at 7. Counts detect added and removed rows, not
+changed or swapped rows. The Before and After Comparisons section below adds a
+comparison at the key level.
+
+A count that changes may also be expected. The report should say "4 users
+before, 4 after" or "4 before, 5 after, expected because the seed adds user 6",
+so a reader can tell a planned change from a regression. A count without an
+expected value is a fact, not yet a finding.
+
+**Deck-level baseline from a view.** The four-table count says how many cards
+exist, not how they are spread across decks. `v_deck_card_counts` (Part 8) gives
+one row per deck, including decks with no cards:
+
+**SQL Server and standard SQL:**
+
+```sql
+SELECT deck_id, title, card_count
+FROM v_deck_card_counts
+WHERE card_count = 0
+ORDER BY deck_id;
+```
+
+**Expected rows.** One row: deck 104, Empty Deck, 0. The view starts from
+`decks` and counts `c.card_id`, so an empty deck survives with a count of 0
+instead of disappearing or counting as 1 (Part 8). Query the view after the
+release as well; a deck that loses its last card appears here, while the
+four-table `COUNT(*)` on `cards` alone reports only that one card disappeared,
+not which deck lost it.
+
+The same view gives a compact release summary:
+
+**SQL Server and standard SQL:**
+
+```sql
+SELECT COUNT(*) AS deck_count,
+       SUM(card_count) AS card_total,
+       SUM(CASE WHEN card_count = 0 THEN 1 ELSE 0 END) AS empty_decks
+FROM v_deck_card_counts;
+```
+
+**Expected row.** One row: 4 decks, 5 cards in total, 1 empty deck. `card_total`
+should equal `COUNT(*)` on `cards` (5) before and after the release, because
+every card belongs to exactly one deck; if the two disagree, either the view or
+the base table changed, and the difference is the finding. Keep the view's
+definition under review: a view stores no rows, so a change to its `LEFT JOIN`
+or its `COUNT` changes every result built on it.
+
+### Duplicate Detection
+
+A duplicate check asks one question at the grain of a rule: which values appear
+more than once in the columns that must be unique? The rule decides the
+`GROUP BY` columns, and the query's result is evidence for or against the rule.
+`HAVING COUNT(*) > 1` keeps only groups that repeat.
+
+**Email in the staging table.** The application intends one account per email,
+but `legacy_users` has no unique constraint, so an import can violate the rule.
+Group by `email`:
+
+**SQL Server and standard SQL:**
+
+```sql
+SELECT email, COUNT(*) AS row_count
+FROM legacy_users
+GROUP BY email
+HAVING COUNT(*) > 1
+ORDER BY email;
+```
+
+**Expected rows.** One row:
+
+| email | row_count |
+|---|---:|
+| alice@example.com | 2 |
+
+Users 1 and 3 both use `alice@example.com`. The query answers "which emails are
+repeated", not "which user row is correct". The report also needs the user IDs
+of the candidates: a second query such as `SELECT user_id, email FROM
+legacy_users WHERE email = 'alice@example.com' ORDER BY user_id` lists them,
+and the owner decides which row survives before a `UNIQUE` constraint is added
+(Part 8).
+
+**Deck titles per user.** The product rule is one title per user's deck list;
+two users may both have a deck called Biology 101. Group by the rule's pair,
+`(title, user_id)`:
+
+**SQL Server and standard SQL:**
+
+```sql
+SELECT title, user_id, COUNT(*) AS deck_count
+FROM decks
+GROUP BY title, user_id
+HAVING COUNT(*) > 1
+ORDER BY title, user_id;
+```
+
+**Expected rows.** None. Decks 101 and 103 share the title Biology 101 but
+belong to users 1 and 2, so each `(title, user_id)` pair appears once. The check
+passes.
+
+Grouping by `title` alone would return Biology 101 with a count of 2 and flag a
+duplicate that the rule allows. That is not a false positive in the database;
+it is a different question. Before you call a row a duplicate, write down the
+exact uniqueness rule and group by its columns. If the rule is "titles are
+unique across the whole product", the same sample fails, and the report should
+state the rule, not only the count.
+
+### Orphan Detection
+
+An orphan row names a parent that does not exist. The application's foreign keys
+prevent orphans in `decks`, `cards`, and `reviews`, but `legacy_reviews` is a
+staging table with no foreign keys, so it can hold `card_id` 9999 and `user_id`
+9999. The anti-join pattern keeps every child row with `LEFT JOIN` and then
+keeps only the rows where the parent side is `NULL`.
+
+**SQL Server and standard SQL:**
+
+```sql
+SELECT lr.review_id,
+       lr.card_id,
+       lr.user_id,
+       CASE WHEN c.card_id IS NULL THEN 'missing card' ELSE 'ok' END AS card_status,
+       CASE WHEN u.user_id IS NULL THEN 'missing user' ELSE 'ok' END AS user_status
+FROM legacy_reviews AS lr
+LEFT JOIN cards AS c ON c.card_id = lr.card_id
+LEFT JOIN users AS u ON u.user_id = lr.user_id
+WHERE c.card_id IS NULL OR u.user_id IS NULL
+ORDER BY lr.review_id;
+```
+
+**Expected rows.** Two rows:
+
+| review_id | card_id | user_id | card_status | user_status |
+|---:|---:|---:|---|---|
+| 20002 | 9999 | 1 | missing card | ok |
+| 20003 | 1001 | 9999 | ok | missing user |
+
+Review 20002 fails the `cards` lookup, so `c.card_id` is `NULL`; review 20003
+fails the `users` lookup, so `u.user_id` is `NULL`. Reviews 20001 and 20004
+match on both sides and are removed by the `WHERE` clause.
+
+**Why both joins in one query.** Each `LEFT JOIN` keeps all four legacy rows
+and adds the parent columns. The `WHERE` keeps a row when either parent is
+missing, so one pass reports both kinds of orphan. The two parent keys are
+primary keys, so each child row matches at most one card and one user, and the
+joins cannot multiply rows. If a parent side could repeat, deduplicate it or use
+`EXISTS` before joining, or the report would list one orphan several times.
+
+**The wrong tools.** `NOT IN` over a column that can be `NULL` returns no rows
+when the list contains a `NULL` (Part 3). The `LEFT JOIN ... IS NULL` shape has
+no such trap: it does not compare every child value with a `NULL`, it tests
+whether the join found a parent. `NOT EXISTS` is the other safe shape (Part 10).
+Do not check only one parent: a review with a valid card and a missing user is
+still an orphan.
+
+### Required-Field Nulls
+
+A null check is only meaningful against a named rule. The schema has two
+nullable columns, and each one allows two different reports:
+
+- `users.display_name` is nullable. A `NULL` is legal in the schema. If the
+  product says a user must have a display name, the `NULL` is a product bug; if
+  the product allows an unnamed user, it is not. The schema cannot tell you
+  which rule the product enforces.
+- `reviews.rating` is nullable. `ck_reviews_rating` requires a non-`NULL`
+  rating to be between 1 and 5, and a `NULL` passes because the check condition
+  is UNKNOWN (Part 8). If the product requires a rating for a completed review,
+  a `NULL` is a product bug; if an unrated review is a valid state, it is not.
+
+**Display names.**
+
+**SQL Server and standard SQL:**
+
+```sql
+SELECT user_id, email
+FROM users
+WHERE display_name IS NULL
+ORDER BY user_id;
+```
+
+**Expected rows.** One row: user 3, `carol@example.com`. The sample contains
+this row on purpose, so the query returning a row is not a release failure by
+itself. Report it with the rule: "one of five users has no display name; the
+schema allows it and the product rule does not require it" or "the product rule
+requires it and one user violates it". The second sentence is a finding; the
+first is a description.
+
+**Ratings.**
+
+**SQL Server and standard SQL:**
+
+```sql
+SELECT review_id, card_id, user_id
+FROM reviews
+WHERE rating IS NULL
+ORDER BY review_id;
+```
+
+**Expected rows.** Two rows: reviews 10003 and 10007. The same distinction
+applies. `ck_reviews_rating` is not a `NOT NULL` rule; it only bounds a value
+that exists.
+
+A compact audit counts the filled and missing values in one pass:
+
+**SQL Server and standard SQL:**
+
+```sql
+SELECT COUNT(*) AS review_count,
+       COUNT(rating) AS rated_count,
+       COUNT(*) - COUNT(rating) AS unrated_count
+FROM reviews;
+```
+
+**Expected row.** One row: 7 reviews, 5 rated, 2 unrated. `COUNT(rating)`
+ignores `NULL` and `COUNT(*)` counts every row, so the difference is the number
+of missing ratings (Part 4). A release that starts recording unrated reviews
+changes `unrated_count`; a release that backfills ratings changes `rated_count`
+and leaves the total at 7.
+
+**Required columns.** Every column other than `users.display_name` and
+`reviews.rating` is declared `NOT NULL`; primary keys are non-null as well. A
+query for `NULL` in one of those columns should return zero rows. If it returns
+a row, either the environment's table is missing the constraint or the data
+predates it; check the column definition before reporting the row as bad data.
+It is a schema finding, not a product-data finding.
+
+**Do not hide the finding.** `COALESCE(rating, 0)` in the check turns a missing
+rating into a rating of 0, which is outside `ck_reviews_rating` and would be a
+different value. Use `COALESCE` in a display layer after the check has reported
+the missing row, never in the predicate that is supposed to detect it. `= NULL`
+never matches; the predicate is `IS NULL` (Part 3).
+
+### Before and After Comparisons
+
+Counts answer "did the number change?"; a key-level comparison answers "which
+row changed?" The shape is a `FULL OUTER JOIN` on the key, with `IS NULL` tests
+for rows that exist on only one side. That covers three outcomes in one result:
+a key only in the baseline, a key only in the current data, and a key on both
+sides with a different value.
+
+The example uses a release boundary of 2026-02-01 00:00:00. The baseline side
+counts reviews recorded before that instant; the current side counts every
+review now. On the sample rows, review 10007 is the only one recorded after the
+boundary.
+
+**SQL Server:**
+
+```sql
+WITH before_release AS (
+    SELECT card_id, COUNT(*) AS review_count
+    FROM reviews
+    WHERE reviewed_at < '2026-02-01 00:00:00'
+    GROUP BY card_id
+),
+after_release AS (
+    SELECT card_id, COUNT(*) AS review_count
+    FROM reviews
+    GROUP BY card_id
+)
+SELECT COALESCE(b.card_id, a.card_id) AS card_id,
+       b.review_count AS before_count,
+       a.review_count AS after_count
+FROM before_release AS b
+FULL OUTER JOIN after_release AS a ON a.card_id = b.card_id
+WHERE b.card_id IS NULL
+   OR a.card_id IS NULL
+   OR b.review_count <> a.review_count
+ORDER BY COALESCE(b.card_id, a.card_id);
+```
+
+The statement is standard SQL; the only dialect difference is the cutoff
+literal, which standard SQL writes as `TIMESTAMP '2026-02-01 00:00:00'`.
+`COALESCE(b.card_id, a.card_id)` keeps the key visible whichever side supplied
+it.
+
+**Expected rows.** One row:
+
+| card_id | before_count | after_count |
+|---:|---:|---:|
+| 1004 | 1 | 2 |
+
+Card 1004 had review 10005 before the boundary and gained review 10007 after
+it; its count rose from 1 to 2. Cards 1001, 1002, and 1003 have the same count
+on both sides and are removed by the `WHERE` clause. Card 1005 has no reviews on
+either side, so it is in neither CTE and disappears before the join.
+
+**Why both `IS NULL` tests.** The `WHERE` clause has three conditions, and the
+first two are not decoration. If a card had reviews before the release and none
+after it, `a.card_id` would be `NULL` and `a.review_count` would be `NULL`;
+`b.review_count <> a.review_count` is then UNKNOWN, not TRUE, and the third
+condition alone would drop the row. `a.card_id IS NULL` keeps it. The mirror
+case, a card whose first reviews arrived during the release, is kept by
+`b.card_id IS NULL`. Without the two `IS NULL` tests, the query reports only
+changed values and silently loses the rows that appeared or disappeared.
+
+**What the comparison does not prove.** It compares counts, so a release that
+changes a rating without adding or removing a review produces no row here. For a
+value-level check, put the key and the value in each CTE and compare the value
+columns with the same `IS NULL` care. Choose the comparison from the claim the
+release makes: "no card lost a review" is a count claim; "no rating decreased"
+needs the values.
+
+**When the baseline is a table.** In a real release the baseline is captured
+before the deployment, often into a QA-owned snapshot table or a saved query
+result. Alias that source as `before_release` and the live table or view as
+`after_release`; the join and the `IS NULL` tests do not change. The baseline
+must come from the same database and the same key definition as the live side,
+or the comparison reports differences that are really environment differences.
+A set difference reports only one direction and drops rows whose value changed;
+the full outer join reports both directions and the change in one pass.
+
+### Status Distributions
+
+A distribution groups rows by a status column and counts each group. It answers
+"did the mix change?" rather than "did the total change?" The two status columns
+in this schema are `decks.is_public` and `reviews.rating`.
+
+**Visibility.**
+
+**SQL Server and standard SQL:**
+
+```sql
+SELECT is_public, COUNT(*) AS deck_count
+FROM decks
+GROUP BY is_public
+ORDER BY is_public;
+```
+
+**Expected rows.**
+
+| is_public | deck_count |
+|---:|---:|
+| 0 | 2 |
+| 1 | 2 |
+
+Decks 102 and 104 are private and decks 101 and 103 are public. On SQL Server
+`is_public` is `BIT`, so the group values are 0 and 1; a report should translate
+them to private and public, but the check should group on the column rather than
+on a label the application computes. A release that changes one deck's
+visibility moves one unit from one group to the other and keeps the total at
+four; the total alone would not show it.
+
+**Ratings.**
+
+**SQL Server and standard SQL:**
+
+```sql
+SELECT rating, COUNT(*) AS review_count
+FROM reviews
+GROUP BY rating
+ORDER BY rating;
+```
+
+**Expected rows.**
+
+| rating | review_count |
+|---:|---:|
+| `NULL` | 2 |
+| 2 | 1 |
+| 3 | 1 |
+| 4 | 1 |
+| 5 | 2 |
+
+The five rated reviews spread over ratings 2 to 5, and two reviews have no
+rating. The sum of the counts is 7, the table's `COUNT(*)`; when it is not, the
+query has lost a group, often because a join removed rows or a `WHERE` clause
+filtered before grouping (Part 4). SQL Server places the `NULL` group first in
+ascending order; the standard does not fix where `NULL` sorts, so do not read
+the position as a product fact. The counts and the reconciliation are the
+evidence.
+
+**Decision rule.** Record the expected distribution with the baseline, not only
+the total. A release that starts writing every new deck as private changes the
+`is_public` split while the deck count stays the same; a release that stops
+collecting ratings changes the `NULL` group. Investigate a shift by listing the
+rows in the changed group, not by re-running the count.
+
+### Test Data Setup and Cleanup
+
+A check that needs a row the sample does not contain creates a fixture. The safe
+pattern is one transaction: insert the fixtures, run the check in the same
+session, and roll back. The rollback removes every inserted row at once, and the
+fixtures never become committed data. Reserved keys, such as 900 and above, make
+the fixture rows easy to recognize and count; the setup, the check, and the
+cleanup verification use the same keys.
+
+**SQL Server:**
+
+```sql
+BEGIN TRANSACTION;
+
+INSERT INTO users (user_id, email, display_name, created_at)
+VALUES (900, 'qa@example.com', 'QA User', '2026-02-15 09:00:00');
+
+INSERT INTO decks (deck_id, user_id, title, is_public, created_at)
+VALUES (900, 900, 'QA Deck', 0, '2026-02-15 09:00:00');
+
+INSERT INTO cards (card_id, deck_id, front, back, created_at)
+VALUES (900, 900, 'QA front', 'QA back', '2026-02-15 09:00:00');
+
+INSERT INTO reviews (review_id, card_id, user_id, rating, reviewed_at)
+VALUES (900, 900, 900, 5, '2026-02-15 09:00:00');
+
+-- The check runs here, in the same session.
+
+SELECT 'users' AS table_name, COUNT(*) AS fixture_count
+FROM users
+WHERE user_id = 900
+UNION ALL
+SELECT 'decks', COUNT(*) FROM decks WHERE deck_id = 900
+UNION ALL
+SELECT 'cards', COUNT(*) FROM cards WHERE card_id = 900
+UNION ALL
+SELECT 'reviews', COUNT(*) FROM reviews WHERE review_id = 900
+ORDER BY table_name;
+
+ROLLBACK TRANSACTION;
+```
+
+**Expected rows.** Inside the transaction the check returns four rows, one per
+table, each with a count of 1. The inserts run parent-first so each foreign key
+finds its parent: user 900, then deck 900, then card 900, then review 900.
+After the rollback, the same `SELECT` returns four rows with a count of 0. That
+second result is the evidence that the fixtures are gone; keep it with the
+release notes.
+
+The standard form uses `START TRANSACTION` and `ROLLBACK` (Part 7); the inserts
+and the check are the same. A fixture in a transaction is visible only to the
+session that created it. That is a feature for a database check and a limit for
+a browser test: the browser opens another connection and cannot see the
+uncommitted rows, so a cross-session test commits the fixtures and then deletes
+them by their reserved keys, child table first, with the same verification
+query at the end (Part 7).
+
+**Never leave fixtures behind.** A committed fixture is ordinary data: it counts
+in every baseline, appears in every distribution, and can satisfy a later check
+that should have failed. If a test must commit its fixture, delete it in
+child-to-parent order (`reviews`, `cards`, `decks`, `users`) and run the
+verification query until it returns zeros. If the session dies mid-check, do
+not assume the rows are gone; reconnect and query the reserved keys. Use a
+transaction and roll it back for every check that can stay in one session.
+
+### Query Review Checklist
+
+Run this review on a check before you share it, and again when a check returns
+an unexpected result. Each row is a question with a failing example.
+
+| Review question | What passing looks like | Where |
+|---|---|---|
+| Is the join type correct? | `INNER JOIN` when only matches matter; `LEFT JOIN` when the parent must survive; `FULL OUTER JOIN` when either side may be missing. A `WHERE` predicate on the right table turns a left join into an inner join unless it admits `NULL`. | Part 5 |
+| Is `NULL` handled? | `IS NULL` and `IS NOT NULL`, never `= NULL`; `NOT IN` is not used over a nullable list; aggregates are known to ignore `NULL`; a `NULL` in the result is either a finding or a declared valid state. | Part 3 |
+| Can rows multiply? | One-to-many joins are counted with `COUNT(DISTINCT key)` or pre-aggregated before the join; the expected row count is written down and matches the grain of the question. | Parts 4 and 5 |
+| Is each filter in the right clause? | Row conditions in `WHERE`, group conditions in `HAVING`, join conditions in `ON`; an outer join's preserved side is not filtered away in `WHERE`. | Parts 4 and 5 |
+| Is the order deterministic? | `ORDER BY` names every column that matters and ends with a unique tiebreaker; no check depends on the server's default order. | Part 2 |
+| Is the result measured? | The query states its expected row count and the actual count is recorded; a performance claim adds the plan and logical reads. | Part 10 |
+
+**Correct join type.** The most common wrong result is not a syntax error; it is
+the right columns from the wrong join. A `LEFT JOIN` that is supposed to keep
+empty decks and is followed by `WHERE c.card_id = 1001` silently drops every
+deck without that card. State which side must survive before choosing the join.
+
+**`NULL` handling.** `NULL` is not a value to compare with `=`; it is a state to
+test with `IS NULL` (Part 3). Check the aggregate as well: `COUNT(*)` and
+`COUNT(column)` answer different questions after a left join.
+
+**Row multiplication.** A join to a child table returns one row per child, not
+one row per parent. Before publishing a count, ask whether one input row can
+appear more than once; if it can, count the distinct key or aggregate first
+(Parts 4 and 5).
+
+**Filters in the right clause.** A row condition in `HAVING` may be legal and
+still wrong, because it filters after grouping. A condition in the `ON` clause
+of a left join is not a filter on the left table; it controls only which right
+rows match. Put each condition where its stage runs (Parts 4 and 5).
+
+**Deterministic ordering.** The sample order is part of the evidence. Without a
+unique `ORDER BY`, two runs can disagree and a reader cannot reproduce the
+result (Part 2). Sort by the key, not only by a label that can repeat.
+
+**Measurement.** A row count of zero is evidence only when the query would have
+returned a row if the defect existed; a query that fails returns an error, not
+zero. Record the query text, the environment, the time, and the row count. For a
+performance claim, add the actual plan and the logical reads (Part 10). A check
+that was not measured is an opinion.
+
+### Release QA Use
+
+- Capture the four-table baseline before the deployment and again after it;
+  store both results with the build identifier, environment, and timestamp.
+  Compare table by table, not only in total.
+- Run the duplicate checks before an import and after it. Report the repeated
+  key, the count, and the rows behind it; a duplicate email is a finding, and a
+  duplicate title is a finding only when the stated rule covers cross-user
+  repeats.
+- Run the orphan checks on every staging table that will feed the live schema.
+  A row with a missing parent is rejected by the live foreign key, so catching
+  it in staging turns a failed migration into a fixable import.
+- Pair every null check with the rule it tests: the schema allows the `NULL`, or
+  the product requires a value. Write which one in the report; a `NULL` that the
+  schema allows is not automatically a bug.
+- Compare before and after at the key level with a full outer join, and look at
+  all three result shapes: missing from the current side, new on the current
+  side, and present on both with a changed value.
+- Record the expected distribution for `is_public` and ratings. A distribution
+  shift is a finding even when the table count is unchanged.
+- Create fixtures in one transaction with reserved keys, run the check, and roll
+  back. Verify the fixture count is zero afterward and attach the verification
+  to the release notes.
+- Use `v_deck_card_counts` for per-deck card counts instead of copying its join
+  into each test. Query it for empty decks and for the summary counts, and
+  compare its output before and after the release.
+- Review every query against the checklist before attaching it to a bug report.
+  The reviewer should be able to point to the join type, the `NULL` handling,
+  the row count, the filter clauses, the ordering, and the measurement.
+- Hand the next engineer the query and the expected result, not only the
+  screenshot. A release check that cannot be rerun is an anecdote.
+
+### Watch-outs
+
+- Equal counts do not mean equal data. A move, a swap, or a delete-and-insert
+  leaves the count unchanged; compare keys and values when the release can
+  modify rows.
+- Group duplicates by the columns in the rule. Grouping `decks` by `title`
+  alone flags decks 101 and 103, which the product allows because they belong
+  to different users.
+- `COUNT(*)` counts the `NULL`-extended row that a left join produces;
+  `COUNT(column)` does not. `COUNT(*)` on the base query behind
+  `v_deck_card_counts` would report one card for empty deck 104 (Part 8).
+- A `LEFT JOIN ... IS NULL` orphan check depends on the parent key being
+  unique. If the parent side can repeat, the join multiplies the child and the
+  report lists one orphan more than once.
+- `= NULL` never matches. Use `IS NULL`. `NOT IN` over a list that contains
+  `NULL` returns no rows, so the orphan and exclusion checks use a join or
+  `NOT EXISTS` (Part 3).
+- In a full outer join comparison, `NULL <> value` is UNKNOWN. Keep the
+  `IS NULL` tests for both key columns, or the comparison silently drops the
+  rows that appeared or disappeared.
+- A transaction fixture is invisible to other sessions. A browser test on
+  another connection will not see it; commit and clean up explicitly if the
+  test must cross sessions.
+- A committed fixture is real data. It inflates counts and distributions, can
+  satisfy a check that should fail, and can break a later insert with a primary
+  key conflict.
+- A view stores no rows. `v_deck_card_counts` reflects the current base tables
+  on every query, and a change to its definition changes every check that uses
+  it (Part 8).
+- The `NULL` group in a rating distribution is data, not noise. Filter it only
+  when the rule says unrated reviews are out of scope, and reconcile the sum of
+  the groups with `COUNT(*)`.
+- No statement in this guide was executed, and no database is bundled. The
+  expected rows come from the fixed sample data; run every check against your
+  own server and compare the result.
+
+## Dialect Portability
+
+SQL Server is the primary track in this guide. SQL Server (T-SQL) syntax comes
+first, and every example is written for current SQL Server. Standard SQL is the
+comparison track: where the two differ, the standard form comes second, so a
+reader can recognize the portable shape. Other databases may differ. This guide
+does not promise that a third database accepts any statement shown here, and it
+does not cover any other product's administration or dialect.
+
+The forms `LIMIT`, `AUTO_INCREMENT`, `IFNULL`, `NOW()`, and `GROUP_CONCAT` are
+examples of other-vendor syntax that this guide does not teach. Each has its own
+spelling and behavior in its own product; the SQL Server and standard forms in
+this guide are not a translation table for it. Before moving a statement to
+another product, read that product's documentation, run the statement against a
+copy of the data, and compare the rows and types, not only whether it parsed.
