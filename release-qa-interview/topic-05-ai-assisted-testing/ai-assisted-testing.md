@@ -504,3 +504,235 @@ can verify the claim.
 - The model may suggest weakening a test to make it pass.
 - “The test passed” without a command and output is not evidence.
 - A fix can pass the new test and still break the old data format.
+
+## Part 5 — Claude Code Essentials
+
+Claude Code is an AI agent that works in your repository. It can read files,
+search the codebase, edit files, and run commands, subject to the permissions
+you grant. That is a different tool from an autocomplete plugin: the useful
+question is not “what will it type next?” but “what task did I delegate, what
+did it change, and how do I verify it?”
+
+### What Claude Code Is
+
+Claude Code runs in a terminal or an editor integration and uses tools to act
+on the project. A typical QA request is:
+
+```text
+Read quiz.html and cards.md. Do not edit yet. Propose a test checklist for the
+one-card-at-a-time behavior, including edge cases and the evidence I should
+capture.
+```
+
+The agent can inspect the files, but it should not be allowed to change them
+until you have reviewed the plan. That is the working model: delegate a bounded
+task, inspect the result, then decide whether to allow the next step.
+
+### CLAUDE.md
+
+`CLAUDE.md` is a Markdown file of project instructions loaded at the start of a
+session. It is where you put the commands, conventions, and definition of done
+that a new teammate would need:
+
+- how to run the tests;
+- the source-of-truth files and formats;
+- what not to edit;
+- the project's language, version, and dependency rules;
+- what “done” means for a change.
+
+Keep it short and concrete. The handbook recommends under 200 lines; a long
+file is re-injected after compaction and competes with the task. Do not put
+secrets in it. Remember that it is context, not enforcement: if something must
+never happen, use a permission rule or a hook, not a polite sentence.
+
+### Context Management
+
+Claude Code sees the files you reference, the conversation, tool output, and
+the project instructions. Context is finite, so manage it:
+
+- Point at the smallest useful set of files, not the whole repository.
+- Use `@path` references when you want a specific file or directory included.
+- Start a fresh session when the task changes; old conversation can distract.
+- After a long debugging session, summarize the finding and start clean.
+- Keep `CLAUDE.md` focused; move path-specific rules into narrower rule files.
+
+A fresh session is not a failure. It is often the cheapest way to get a
+focused answer.
+
+### Tools and Permissions
+
+Claude Code's permission system controls what runs without asking. The modes
+range from manual review to broad automation; the exact labels and behavior
+come from the current Claude Code documentation. For QA work, the safe defaults
+are:
+
+- **Read-only first:** inspect, search, and propose before editing.
+- **Review every write:** a diff is easier to review than an edited file.
+- **Approve commands narrowly:** “run this one test” is safer than “allow all
+  Bash commands.”
+- **Deny secrets:** keep `.env`, credentials, and private keys out of reach.
+- **Never bypass permissions on a machine or folder you care about.**
+
+A permission prompt is a decision point, not a speed bump. If you do not
+understand a command, ask for an explanation before approving it.
+
+### Plan Mode
+
+Plan mode lets the agent research and propose a change without editing files.
+Use it when the task is ambiguous or the blast radius is large:
+
+```text
+Investigate why the quiz test is flaky. Read the test, the fixture, and the
+last CI log. Do not edit. Propose three hypotheses and the smallest experiment
+that would distinguish them.
+```
+
+Plan mode is a good fit for test strategy, migration checks, and any change that
+touches shared fixtures. Review the plan before you switch to editing.
+
+### Reviewing Changes
+
+A change is not accepted because the agent says it is correct. Review:
+
+1. **The diff:** what changed, what did not, and whether the scope matches the
+   request.
+2. **The tests:** which test covers the change, and what evidence shows it ran.
+3. **The rollback:** can the change be reverted without leaving data or
+   configuration behind?
+4. **The side effects:** new dependencies, generated files, logs, or secrets.
+
+Git is the reliable undo. Commit a working state before a large change, and use
+the diff rather than memory.
+
+### Release QA Use
+
+Use Claude Code to draft a test plan, review a diff, summarize a failure, or
+propose a regression checklist. Start read-only, ask for assumptions and
+evidence, and keep writes behind a review. The agent can accelerate the work;
+it does not become the release authority.
+
+### Watch-outs
+
+- Broad permissions turn a small mistake into a large one.
+- `CLAUDE.md` is context, not a guarantee.
+- A long session can lose the relevant detail.
+- A generated diff can include unrelated edits.
+- Never paste secrets or customer data into the session.
+
+## Part 6 — Skills and Reusable Workflows
+
+A skill is a reusable instruction package. It turns a good prompt into a
+repeatable workflow that you can invoke by name or let Claude Code match
+automatically. Skills are how a QA team stops rewriting the same test-plan
+prompt for every release.
+
+### What a Skill Is
+
+A skill is a folder with a `SKILL.md` file, optionally with reference files or
+scripts. The body is the instruction; the frontmatter tells Claude Code when to
+use it. A skill can be:
+
+- a saved test-plan procedure;
+- a bug-report template with evidence requirements;
+- a diff-review checklist;
+- a release-note generator with a fixed output shape.
+
+The skill should have one job. “Do all QA work” is not a skill; “turn a
+requirement into a risk-based test checklist” is.
+
+### SKILL.md and Frontmatter
+
+A minimal skill looks like this:
+
+```markdown
+---
+name: risk-checklist
+description: Turn a requirement into a risk-based QA checklist. Use when the user asks for test risks, a test plan, or a checklist for a release requirement.
+argument-hint: [requirement-file]
+allowed-tools: Read, Grep
+---
+
+# Risk checklist
+
+Read the requirement at `$ARGUMENTS`. Do not edit files.
+
+1. List the product rules you can verify from the file.
+2. List your assumptions separately.
+3. Group risks by data, state, input, integration, and release.
+4. For each risk, give a test idea, expected result, and evidence needed.
+5. Mark anything you cannot know as an open question.
+
+Return a table with Area, Risk, Test idea, Expected result, Evidence, and
+Priority.
+```
+
+Frontmatter fields a beginner should know:
+
+| Field | Purpose |
+|---|---|
+| `name` | The skill name; defaults to the folder name |
+| `description` | What it does and when to use it; this is the automatic trigger |
+| `argument-hint` | Autocomplete hint, such as `[requirement-file]` |
+| `allowed-tools` | Pre-approve listed tools for the invoking turn; it does not restrict other tools |
+| `disable-model-invocation` | `true` means only you can run it; use for side effects |
+| `context: fork` | Run the skill in a subagent instead of the main conversation |
+| `model` | Override the model for this skill |
+
+Arguments use `$ARGUMENTS` for everything after the command; `$1`, `$2` insert
+individual arguments.
+
+### Progressive Disclosure
+
+Skills load in stages:
+
+1. At session start, Claude Code sees only the name and description.
+2. When the skill is invoked, it loads the `SKILL.md` body.
+3. Reference files and scripts load only if the body points to them.
+
+This is why a skill can carry a long checklist without bloating every session.
+Put the critical rules near the top; a compact body is more reliable than a
+giant one.
+
+### Explicit and Automatic Invocation
+
+- **Explicit:** type `/risk-checklist path/to/requirement.md`.
+- **Automatic:** Claude Code matches the task against the description and
+  invokes the skill when it fits.
+
+The description is the trigger. “Makes checklists” is weak. “Turn a requirement
+into a risk-based QA checklist; use when the user asks for test risks, a test
+plan, or a release checklist” is specific.
+
+### Skills vs Slash Commands
+
+Older material teaches `.claude/commands/<name>.md` for custom slash commands.
+That still works, but current Claude Code documentation treats commands as a
+form of skill and recommends `.claude/skills/` for new work. Use skills: the
+mental model is simpler, and skills can be invoked automatically.
+
+### A QA Skill Example
+
+The `risk-checklist` skill above is a good first project skill. A team can
+extend it with:
+
+- a `references/severity.md` file that defines High/Medium/Low;
+- a `references/release-gates.md` file with the team's release rules;
+- a script that validates the output table's columns.
+
+Keep the `SKILL.md` body short and point to the references. When the skill
+produces a bad checklist, fix the skill's rules, not just that one answer.
+
+### Release QA Use
+
+Commit a project skill for the workflows the team repeats: risk checklist, bug
+report, diff review, regression selection, release notes. Review the skill like
+code, test it with a real requirement, and update it when the team's rules
+change. A skill is a process asset, not a one-off prompt.
+
+### Watch-outs
+
+- A vague description means the skill will not trigger reliably.
+- A skill that tries to do everything becomes hard to review.
+- Side-effecting skills need `disable-model-invocation: true` and approval.
+- Skills can go stale; version them with the project.
+- A skill produces a draft, not evidence that the test passed.
