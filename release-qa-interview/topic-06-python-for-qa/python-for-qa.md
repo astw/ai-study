@@ -493,3 +493,274 @@ runs in CI. A good failure says which file, which row, and what was expected.
 - `json.loads()` expects a string; `json.load()` expects a file object.
 - Do not write secrets or customer data to a log.
 - A missing file is a test result only when the test expects it.
+
+## Part 5 — Testing with pytest
+
+### Test Discovery
+
+**Day-to-day.** `pytest` discovers files named `test_*.py` or `*_test.py` and
+functions named `test_*`. You normally do not call a test function yourself;
+run the test runner.
+
+```python
+# tests/test_cards.py
+
+def test_card_count():
+    cards = ["one", "two", "three"]
+    assert len(cards) == 3
+```
+
+```bash
+pytest
+pytest tests/test_cards.py -q
+```
+
+Use a clear test name that describes the behavior, not the implementation. A
+test file with one purpose is easier to run and review.
+
+### Assertions
+
+**Day-to-day.** A test fails when an `assert` is false. Add a message that
+shows the expected and actual value.
+
+```python
+def test_no_empty_answers():
+    cards = [{"answer": "A"}, {"answer": ""}]
+    empty = [card for card in cards if not card["answer"]]
+    assert empty == [], f"Expected no empty answers, found {empty}"
+```
+
+The message is what a reviewer sees first. Make it say what rule failed and
+which data caused it.
+
+### pytest.raises
+
+**Frequent.** Use `pytest.raises` when the correct behavior is an exception.
+It checks the exception type, not just that something failed.
+
+```python
+import pytest
+
+def parse_count(raw):
+    return int(raw)
+
+def test_bad_count():
+    with pytest.raises(ValueError):
+        parse_count("not-a-number")
+```
+
+Do not use it to hide an unexpected error; match the specific exception you
+expect.
+
+### Fixtures
+
+**Frequent.** A fixture prepares data or a resource for a test. `tmp_path` is a
+built-in pytest fixture that gives each test a temporary directory.
+
+```python
+import pytest
+
+@pytest.fixture
+def cards_file(tmp_path):
+    path = tmp_path / "cards.md"
+    path.write_text("### Cell\nQ: What is a cell?\nA: The basic unit of life\n", encoding="utf-8")
+    return path
+
+def test_file_exists(cards_file):
+    assert cards_file.exists()
+```
+
+Keep fixtures small and explicit. A fixture that hides too much setup makes a
+failure harder to understand.
+
+### Parametrization
+
+**Frequent.** `@pytest.mark.parametrize` runs the same test with several inputs
+and gives each case its own result.
+
+```python
+import pytest
+
+def count_questions(text):
+    return text.count("Q:")
+
+@pytest.mark.parametrize("text, expected", [
+    ("Q: one\n", 1),
+    ("Q: one\nQ: two\n", 2),
+    ("", 0),
+])
+def test_count_questions(text, expected):
+    assert count_questions(text) == expected
+```
+
+Use it for boundary values and data variations instead of copying the same test
+several times.
+
+### Reading a Failure
+
+**Day-to-day.** A pytest failure shows the test name, the failing line, the
+assertion, and the values. Read the first failure before the summary; later
+failures may be consequences.
+
+```text
+FAILED tests/test_cards.py::test_no_empty_answers
+AssertionError: Expected no empty answers, found [{'answer': ''}]
+```
+
+Reproduce the case with a single test, inspect the input, and fix the product
+or the test. Do not weaken the assertion just to get a green run.
+
+### Release QA Use
+
+Use pytest for parser checks, empty-data cases, duplicate questions, malformed
+lines, and API response checks. Keep each test focused, use fixtures for
+temporary files, and parametrize the boundaries. A test is evidence only when
+it runs and its assertion is meaningful.
+
+### Watch-outs
+
+- A test that never asserts anything is not a test.
+- `pytest.raises` should name the expected exception, not catch everything.
+- Fixtures that share mutable state can make tests order-dependent.
+- A test that passes for the wrong reason is worse than a clear failure.
+- Do not edit a test to match a bug unless the product rule really changed.
+- `@pytest.fixture` and `@pytest.mark.parametrize` are pytest marker syntax;
+  copy the pattern, you do not need general decorator knowledge for this pack.
+
+## Part 6 — QA Scripting
+
+### subprocess
+
+**Frequent.** `subprocess.run` runs another program. Pass a list of arguments,
+capture the output, and check the return code.
+
+```python
+import subprocess
+
+result = subprocess.run(
+    ["python", "--version"],
+    capture_output=True,
+    text=True,
+    check=False,
+)
+print(result.returncode)
+print(result.stdout.strip())
+```
+
+Use `check=True` when a non-zero exit should raise an exception. Do not build a
+shell string from user input; pass a list to avoid shell quoting problems.
+
+### argparse
+
+**Situational.** `argparse` turns command-line arguments into a small, readable
+interface for a QA script.
+
+```python
+import argparse
+from pathlib import Path
+
+parser = argparse.ArgumentParser(description="Check a cards file")
+parser.add_argument("path", type=Path)
+parser.add_argument("--strict", action="store_true")
+args = parser.parse_args()
+
+print(args.path, args.strict)
+```
+
+Use it when a script needs a file path or a flag. For a one-off check, a
+hard-coded path may be simpler.
+
+### datetime
+
+**Frequent.** `datetime` handles dates and times. Use `datetime.now()` for the
+current local time, `timedelta` for a difference, and `strftime` for a stable
+report format.
+
+```python
+from datetime import datetime, timedelta
+
+started = datetime.now()
+finished = started + timedelta(seconds=30)
+print(started.strftime("%Y-%m-%d %H:%M:%S"))
+print((finished - started).total_seconds())
+```
+
+Use timezone-aware values when comparing times from different systems; a naive
+local time can be ambiguous.
+
+### requests for API Checks
+
+**Frequent.** `requests` is a third-party HTTP library. Use a timeout, check the
+status, and parse JSON explicitly. The URL below is a hypothetical test API; no
+call was made for this guide.
+
+```python
+import requests
+
+url = "https://test-api.example.invalid/cards"
+response = requests.get(url, timeout=5)
+response.raise_for_status()
+payload = response.json()
+print(len(payload["cards"]))
+```
+
+`raise_for_status()` turns a 4xx/5xx response into an exception. Always set a
+timeout so a hung service does not hang the test run.
+
+### Environment Variables
+
+**Frequent.** Put the base URL and other environment-specific values in
+environment variables instead of hard-coding them. Never put a secret in a
+script or a log.
+
+```python
+import os
+
+base_url = os.environ.get("BASE_URL", "http://localhost:8000")
+print(f"Using {base_url}")
+```
+
+Provide a safe default for local runs, and document the required variable in
+the README. CI can set the real value without changing the code.
+
+### A Small End-to-End Check
+
+**Situational.** An end-to-end script can combine file parsing, an API check,
+and a summary. Keep it small and make each failure say what broke.
+
+```python
+from pathlib import Path
+
+import requests
+
+cards_path = Path("cards.md")
+if not cards_path.exists():
+    raise SystemExit("Missing cards.md")
+
+card_count = cards_path.read_text(encoding="utf-8").count("Q:")
+if card_count == 0:
+    raise SystemExit("No questions found")
+
+response = requests.get("https://test-api.example.invalid/health", timeout=5)
+response.raise_for_status()
+print(f"cards={card_count} status={response.status_code}")
+```
+
+The URL is hypothetical and not called by this guide. In a real script, read the
+base URL from the environment and keep the check idempotent.
+
+### Release QA Use
+
+Use `subprocess` to call a CLI, `argparse` to make a script reusable, `datetime`
+to timestamp a report, `requests` to check a test API, and environment variables
+to separate configuration from code. An end-to-end script should fail loudly and
+print enough context for the next person.
+
+### Watch-outs
+
+- A shell command built from untrusted text can be dangerous; pass a list.
+- A request without a timeout can hang a test run.
+- A 200 status does not always mean the payload is correct; validate the body.
+- Do not commit tokens, passwords, or customer URLs.
+- A script that needs production access should require explicit approval.
+- This guide's examples are syntax-checked, not executed.
