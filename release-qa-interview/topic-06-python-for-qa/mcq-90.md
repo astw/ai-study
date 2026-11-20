@@ -649,3 +649,639 @@ D. The keys
 **Correct answer: D.** Iterating a dictionary yields its keys. Use `.items()` for key/value pairs.
 
 </details>
+
+## Part 4 — Files and Data (15 questions)
+
+#### MCQ 46. A tester needs `data/cards.md` on Windows, macOS, and Linux. Which path construction is most portable?
+
+A. `"data" + ":" + "cards.md"`
+B. `"data" + "\\" + "cards.md"`
+C. `"data/cards.md"` passed to `open` only
+D. `Path("data") / "cards.md"`
+
+<details>
+<summary>Show answer</summary>
+
+**Correct answer: D.** `pathlib.Path` handles separators portably.
+
+</details>
+
+#### MCQ 47. Why use `with open(...)` for a fixture?
+
+A. It makes the file read-only
+B. It closes the file even if an exception occurs
+C. It encrypts the file
+D. It converts the file to JSON
+
+<details>
+<summary>Show answer</summary>
+
+**Correct answer: B.** `with` manages the file handle and closes it reliably.
+
+</details>
+
+#### MCQ 48. A log contains accented characters. Which read is safest?
+
+A. `path.read_text()`
+B. `open(path).read()`
+C. `path.read_text(encoding="utf-8")`
+D. `path.read_bytes().decode("latin-1")`
+
+<details>
+<summary>Show answer</summary>
+
+**Correct answer: C.** Pass the encoding explicitly; UTF-8 is the usual choice for a UTF-8 fixture.
+
+</details>
+
+#### MCQ 49. Which function parses a JSON string?
+
+A. `json.dump`
+B. `json.load`
+C. `json.parse_file`
+D. `json.loads`
+
+<details>
+<summary>Show answer</summary>
+
+**Correct answer: D.** `json.loads` parses a string; `json.load` reads a file object.
+
+</details>
+
+#### MCQ 50. A test has an open JSON file object. Which call reads it?
+
+A. `json.load(handle)`
+B. `json.loads(handle)`
+C. `json.read(handle)`
+D. `json.file(handle)`
+
+<details>
+<summary>Show answer</summary>
+
+**Correct answer: A.** `json.load` accepts a file object; `json.loads` accepts a string.
+
+</details>
+
+#### MCQ 51. How do you read `cards.csv` into dictionaries keyed by header?
+
+A. `csv.reader` with manual indexes
+B. `csv.DictReader(handle)`
+C. `json.load(handle)`
+D. `Path.read_text().split(",")`
+
+<details>
+<summary>Show answer</summary>
+
+**Correct answer: B.** `DictReader` maps each row to a dictionary using the header.
+
+</details>
+
+#### MCQ 52. Why open a CSV with `newline=""`?
+
+A. To make the file smaller
+B. To convert values to numbers
+C. So the `csv` module handles line endings correctly
+D. To encrypt the file
+
+<details>
+<summary>Show answer</summary>
+
+**Correct answer: C.** `newline=""` avoids double newline handling on different platforms.
+
+</details>
+
+#### MCQ 53. A fixture may be missing. Which exception should you catch?
+
+A. `Exception`
+B. `KeyboardInterrupt`
+C. `SystemExit`
+D. `FileNotFoundError`
+
+<details>
+<summary>Show answer</summary>
+
+**Correct answer: D.** Catch the specific error you can handle; let unexpected errors surface.
+
+</details>
+
+#### MCQ 54. Why is a bare `except:` risky?
+
+A. It catches every error, including programming mistakes, and hides the cause
+B. It makes the script slower
+C. It cannot catch file errors
+D. It only works on Windows
+
+<details>
+<summary>Show answer</summary>
+
+**Correct answer: A.** Catch the narrow exception you expect; a bare except can swallow real bugs.
+
+</details>
+
+#### MCQ 55. When is `logging` better than `print`?
+
+A. When the script is one line
+B. When the script runs in CI and needs levels, timestamps, or filterable records
+C. When the output must be hidden
+D. When the script has no errors
+
+<details>
+<summary>Show answer</summary>
+
+**Correct answer: B.** `logging` is for structured, filterable output; `print` is fine for a small local script.
+
+</details>
+
+#### MCQ 56. What must never appear in a log?
+
+A. A file path
+B. A test name
+C. A token, password, or customer secret
+D. A timestamp
+
+<details>
+<summary>Show answer</summary>
+
+**Correct answer: C.** Logs are copied into tickets and CI artifacts; secrets and customer data stay out.
+
+</details>
+
+#### MCQ 57. How do you test a missing-file case safely?
+
+A. Point at a nonexistent path in a temporary directory and assert the specific error
+B. Create the file and delete it after the test
+C. Use the production database
+D. Ignore the error and mark the test as passed
+
+<details>
+<summary>Show answer</summary>
+
+**Correct answer: A.** The test should expect the specific missing-file behavior without touching real fixtures.
+
+</details>
+
+#### MCQ 58. What should a file-validation failure say?
+
+A. The file, row or key, expected value, and actual value
+B. Only “failed”
+C. Only the test name
+D. A stack trace with secrets
+
+<details>
+<summary>Show answer</summary>
+
+**Correct answer: A.** Specific context lets the next person reproduce and fix the problem.
+
+</details>
+
+#### MCQ 59. A CSV column contains `"12"`. What should the script do before adding 1?
+
+A. Convert it with `str()`
+B. Convert it with `int()`
+C. Compare it to `None`
+D. Convert it to a list
+
+<details>
+<summary>Show answer</summary>
+
+**Correct answer: B.** CSV values are strings; `int()` produces a number for arithmetic.
+
+</details>
+
+#### MCQ 60. Which write is safest for a small UTF-8 report?
+
+A. `open("report.txt", "w")` without a close
+B. `Path("report.txt").write_text("ok")` without encoding
+C. `with open("report.txt", "w", encoding="utf-8") as handle: handle.write("ok")`
+D. `print("ok")`
+
+<details>
+<summary>Show answer</summary>
+
+**Correct answer: C.** The `with` form closes reliably and sets the encoding explicitly.
+
+</details>
+
+## Part 5 — Testing with pytest (15 questions)
+
+#### MCQ 61. Which file will pytest discover by default?
+
+A. `tests/test_cards.py`
+B. `tests/cards_test.py` only
+C. `tests/check_cards.py`
+D. `tests/cards.py`
+
+<details>
+<summary>Show answer</summary>
+
+**Correct answer: A.** pytest discovers `test_*.py` (and `*_test.py`) files with `test_*` functions.
+
+</details>
+
+#### MCQ 62. Which assertion message is most useful?
+
+A. `assert count == 3`
+B. `assert count == 3, f"Expected 3 cards, found {count}"`
+C. `assert count`
+D. `assert True`
+
+<details>
+<summary>Show answer</summary>
+
+**Correct answer: B.** It states the rule and the actual value.
+
+</details>
+
+#### MCQ 63. A test expects invalid input to raise `ValueError`. What should it use?
+
+A. A bare `try`
+B. `assert False`
+C. `with pytest.raises(ValueError):`
+D. `pytest.skip`
+
+<details>
+<summary>Show answer</summary>
+
+**Correct answer: C.** `pytest.raises` checks the specific expected exception.
+
+</details>
+
+#### MCQ 64. What is a pytest fixture?
+
+A. A test file
+B. A production dependency
+C. A command-line flag
+D. Setup data or a resource that a test requests by name
+
+<details>
+<summary>Show answer</summary>
+
+**Correct answer: D.** Fixtures prepare what a test needs, such as a temporary file.
+
+</details>
+
+#### MCQ 65. Which fixture gives a test a temporary directory?
+
+A. `tmp_path`
+B. `temp_file`
+C. `workspace`
+D. `fixture_dir`
+
+<details>
+<summary>Show answer</summary>
+
+**Correct answer: A.** `tmp_path` is built into pytest and is cleaned up automatically.
+
+</details>
+
+#### MCQ 66. What does `@pytest.mark.parametrize` do?
+
+A. Skips a test
+B. Runs the same test with several input/expected pairs
+C. Creates a fixture
+D. Installs a package
+
+<details>
+<summary>Show answer</summary>
+
+**Correct answer: B.** Each case appears separately in the output.
+
+</details>
+
+#### MCQ 67. A pytest run shows one failing assertion after another. Which should you read first?
+
+A. The last line of the summary
+B. The longest traceback
+C. The first failing test and its assertion values
+D. The coverage report
+
+<details>
+<summary>Show answer</summary>
+
+**Correct answer: C.** The first failure is usually the cause; later failures may be consequences.
+
+</details>
+
+#### MCQ 68. Why should tests be independent?
+
+A. So they run faster
+B. So they never fail
+C. So they do not need assertions
+D. So they can run alone and in any order
+
+<details>
+<summary>Show answer</summary>
+
+**Correct answer: D.** Independence makes failures reproducible and avoids hidden ordering dependencies.
+
+</details>
+
+#### MCQ 69. A test function calls no assertions and just prints. What is it?
+
+A. Not a meaningful test
+B. A fixture
+C. A parametrized test
+D. A passing test
+
+<details>
+<summary>Show answer</summary>
+
+**Correct answer: A.** Without an assertion, the test does not check behavior.
+
+</details>
+
+#### MCQ 70. Why can shared mutable fixture state cause problems?
+
+A. It makes the test file too short
+B. Tests can depend on order and interfere with each other
+C. pytest cannot read lists
+D. It changes the Python version
+
+<details>
+<summary>Show answer</summary>
+
+**Correct answer: B.** Each test should get isolated data; shared state causes order-dependent failures.
+
+</details>
+
+#### MCQ 71. Which should a unit test not depend on?
+
+A. A local synthetic fixture
+B. A temporary file
+C. A live production service without a controlled endpoint
+D. A parametrized input
+
+<details>
+<summary>Show answer</summary>
+
+**Correct answer: C.** Test your code against a controlled test endpoint or a fake; production is not a unit-test dependency.
+
+</details>
+
+#### MCQ 72. How does pytest differ from unittest?
+
+A. pytest cannot run assertions
+B. unittest cannot use fixtures
+C. pytest only works with Django
+D. pytest uses plain functions and `assert`, with fixtures and parametrization built in
+
+<details>
+<summary>Show answer</summary>
+
+**Correct answer: D.** pytest is shorter for small suites; unittest uses classes and `self.assert*`.
+
+</details>
+
+#### MCQ 73. Which test name is clearest?
+
+A. `test_empty_cards_file_reports_zero`
+B. `test_1`
+C. `test_stuff`
+D. `test_it`
+
+<details>
+<summary>Show answer</summary>
+
+**Correct answer: A.** A descriptive name tells the reviewer what behavior is protected.
+
+</details>
+
+#### MCQ 74. Where does pytest show the actual value that failed an assertion?
+
+A. Only in the test name
+B. In the failing assertion output
+C. In the requirements file
+D. In the git log
+
+<details>
+<summary>Show answer</summary>
+
+**Correct answer: B.** The failure output shows the assertion and the values.
+
+</details>
+
+#### MCQ 75. A test fails, and the fix is to delete the assertion. What should the reviewer do?
+
+A. Accept it
+B. Delete the test
+C. Ignore the failure
+D. Treat it as a weakened test until the product rule justifies the change
+
+<details>
+<summary>Show answer</summary>
+
+**Correct answer: D.** Removing the check can hide the failure; the test must still verify required behavior.
+
+</details>
+
+## Part 6 — QA Scripting (15 questions)
+
+#### MCQ 76. How should a Python script run another program with arguments?
+
+A. `subprocess.run(["python", "--version"], capture_output=True, text=True)`
+B. `subprocess.run("python --version")` only
+C. `os.system("python --version")` for all cases
+D. `run("python")`
+
+<details>
+<summary>Show answer</summary>
+
+**Correct answer: A.** Pass a list to avoid shell quoting problems and capture the output.
+
+</details>
+
+#### MCQ 77. A subprocess returns `1`. What does that usually mean?
+
+A. Success
+B. Failure
+C. The program was skipped
+D. The output was empty
+
+<details>
+<summary>Show answer</summary>
+
+**Correct answer: B.** Zero is success; non-zero is failure.
+
+</details>
+
+#### MCQ 78. Why capture stdout and stderr from a subprocess?
+
+A. To make the command faster
+B. To hide the output
+C. To include the evidence in a failure message
+D. To install dependencies
+
+<details>
+<summary>Show answer</summary>
+
+**Correct answer: C.** Captured output lets the report show what the command printed.
+
+</details>
+
+#### MCQ 79. A QA script needs a file path and a `--strict` flag. Which tool fits?
+
+A. `json`
+B. `csv`
+C. `datetime`
+D. `argparse`
+
+<details>
+<summary>Show answer</summary>
+
+**Correct answer: D.** `argparse` defines positional and optional arguments with help text.
+
+</details>
+
+#### MCQ 80. Which call gives the current local date and time?
+
+A. `time.sleep()`
+B. `datetime.now()`
+C. `date.today()` only
+D. `datetime.strftime()`
+
+<details>
+<summary>Show answer</summary>
+
+**Correct answer: B.** `datetime.now()` returns the current local date and time; `strftime` formats a value.
+
+</details>
+
+#### MCQ 81. Why use timezone-aware datetimes when comparing systems?
+
+A. They make the output shorter
+B. They remove the need for timestamps
+C. Naive local times can be ambiguous across time zones
+D. They convert numbers to strings
+
+<details>
+<summary>Show answer</summary>
+
+**Correct answer: C.** Timezone-aware values make cross-system comparisons meaningful.
+
+</details>
+
+#### MCQ 82. Why set a timeout on `requests.get`?
+
+A. To make the response larger
+B. To skip the status check
+C. To convert JSON automatically
+D. To avoid hanging the test run when the service does not respond
+
+<details>
+<summary>Show answer</summary>
+
+**Correct answer: D.** A timeout turns a hung service into a clear failure.
+
+</details>
+
+#### MCQ 83. What does `response.raise_for_status()` do?
+
+A. Raises an exception for a 4xx or 5xx response
+B. Returns the JSON body
+C. Sets a timeout
+D. Deletes the response
+
+<details>
+<summary>Show answer</summary>
+
+**Correct answer: A.** It turns an HTTP error status into an exception.
+
+</details>
+
+#### MCQ 84. How should a script get its base URL?
+
+A. Hard-code the production URL
+B. Read it from an environment variable with a safe default
+C. Put it in a test name
+D. Store it in a log
+
+<details>
+<summary>Show answer</summary>
+
+**Correct answer: B.** Environment variables separate configuration from code and avoid hard-coded environments.
+
+</details>
+
+#### MCQ 85. Where should an API token go?
+
+A. In the Python source
+B. In the README
+C. In an approved secret store or environment variable, never in the repo
+D. In a log line
+
+<details>
+<summary>Show answer</summary>
+
+**Correct answer: C.** Secrets stay out of source, docs, and logs; use an approved store.
+
+</details>
+
+#### MCQ 86. What makes an end-to-end QA script idempotent?
+
+A. It changes production data every run
+B. It creates a new user each run
+C. It prints more output
+D. It can run repeatedly without leaving state behind
+
+<details>
+<summary>Show answer</summary>
+
+**Correct answer: D.** Idempotent checks do not accumulate or corrupt state.
+
+</details>
+
+#### MCQ 87. Why is building a shell string from user input risky?
+
+A. The input can inject shell commands or break quoting
+B. Python cannot run shell strings
+C. The shell is always slower
+D. It disables subprocess
+
+<details>
+<summary>Show answer</summary>
+
+**Correct answer: A.** Pass a list of arguments instead of interpolating untrusted text.
+
+</details>
+
+#### MCQ 88. An API returns HTTP 200. Is the payload automatically correct?
+
+A. Yes, 200 means the data is valid
+B. No; validate the body against the contract
+C. Only if the response is JSON
+D. Only if a timeout was set
+
+<details>
+<summary>Show answer</summary>
+
+**Correct answer: B.** A 200 status does not prove the payload's fields or values are correct.
+
+</details>
+
+#### MCQ 89. When is a Python script not worth writing?
+
+A. When the check has several steps
+B. When the logic needs tests
+C. When a shell one-liner or existing tool already does the job
+D. When the data is JSON
+
+<details>
+<summary>Show answer</summary>
+
+**Correct answer: C.** A script adds maintenance and review surface; use the simplest tool that works.
+
+</details>
+
+#### MCQ 90. What makes a QA script trustworthy?
+
+A. It prints “OK” without checking anything
+B. It hides failures
+C. It uses production data by default
+D. It checks a real condition, fails clearly, and is reproducible
+
+<details>
+<summary>Show answer</summary>
+
+**Correct answer: D.** A trustworthy check has a real assertion, a clear non-zero failure, and evidence.
+
+</details>
