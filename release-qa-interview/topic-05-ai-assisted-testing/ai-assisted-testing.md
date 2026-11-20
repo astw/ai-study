@@ -528,6 +528,11 @@ The agent can inspect the files, but it should not be allowed to change them
 until you have reviewed the plan. That is the working model: delegate a bounded
 task, inspect the result, then decide whether to allow the next step.
 
+Use the terminal for repository-wide tasks, scripts, and CI-like runs. Use the
+editor integration when you want in-file edits, a visible diff, and the current
+selection as context. Permissions and `CLAUDE.md` apply in both; the task
+boundary matters more than the surface.
+
 ### CLAUDE.md
 
 `CLAUDE.md` is a Markdown file of project instructions loaded at the start of a
@@ -575,6 +580,12 @@ are:
 
 A permission prompt is a decision point, not a speed bump. If you do not
 understand a command, ask for an explanation before approving it.
+
+**Hooks** are event-triggered handlers configured in `settings.json`. A
+`PreToolUse` hook can block edits to `.env`; a `PostToolUse` hook can format a
+file after an edit. `CLAUDE.md` is context, a hook is enforcement, and the
+permission system remains the hard boundary. Add a hook only for a concrete
+rule you need to guarantee.
 
 ### Plan Mode
 
@@ -828,7 +839,8 @@ a structured report with evidence.
 
 ### Watch-outs
 
-- A subagent is not automatically independent; it sees only what you give it.
+- A subagent does not see the main conversation, and some built-in agents skip
+  `CLAUDE.md`; give it exact paths and the rules that matter.
 - Parallel writers can create conflicts that are expensive to untangle.
 - A reviewer with write access may “fix” the thing it was supposed to flag.
 - A fresh context can miss project conventions; include `CLAUDE.md` or the
@@ -864,10 +876,12 @@ write tools as production changes unless the server is clearly sandboxed.
 ### Local and Remote Transports
 
 A local server often runs over **stdio**: Claude Code starts the process and
-sends JSON-RPC over standard input/output. A remote server may use HTTP or SSE,
-with authentication and network failure modes. Local does not automatically mean
-safe; a local server can still read files, call the network, or write a
-database. Read the server before connecting it.
+sends JSON-RPC over standard input/output. A remote server typically uses the
+HTTP transport (Streamable HTTP); SSE is a legacy/deprecated transport still
+supported for compatibility. Remote servers add authentication and network
+failure modes. Local does not automatically mean safe; a local server can still
+read files, call the network, or write a database. Read the server before
+connecting it.
 
 ### Connecting the Flashcards Demo
 
