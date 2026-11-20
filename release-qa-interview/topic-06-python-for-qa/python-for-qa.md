@@ -92,9 +92,10 @@ place:
 
 ```text
 project/
-  cards.md
-  cards.csv
-  quiz.html
+  data/
+    cards.md
+    cards.csv
+    quiz.html
   check_cards.py
   requirements.txt
   tests/
@@ -102,8 +103,8 @@ project/
 ```
 
 Keep data fixtures out of production paths, put tests under `tests/`, and keep
-one-off scripts under `scripts/`. The layout is a convention, not a rule; the
-goal is that another QA engineer can find the test and the data.
+one-off scripts at the root or under `scripts/`. The layout is a convention, not
+a rule; the goal is that another QA engineer can find the test and the data.
 
 ### Release QA Use
 
@@ -179,13 +180,23 @@ record. A set stores unique values and is useful for duplicate checks.
 ```python
 card = {"id": 1, "question": "What is a cell?", "answer": "The basic unit of life"}
 print(card["question"])
+for key in card:
+    print(key)
+
+cards_by_id = {1: card}
+print(cards_by_id[1]["question"])
+
 questions = ["What is DNA?", "What is DNA?", "What is a gene?"]
 unique = set(questions)
 print(len(unique))
+
+tags = {"biology", "cells"}
+print(tags)
 ```
 
 A dictionary lookup by a missing key raises `KeyError`; use `.get("key")` when
-the key may be absent. A set loses order, which is fine for uniqueness checks.
+the key may be absent. Iterating a dictionary yields its keys. A set loses
+order, which is fine for uniqueness and tag checks.
 
 ### Indexing and Slicing
 
@@ -301,7 +312,9 @@ are inputs; defaults make optional arguments explicit.
 ```python
 def normalize(text, lower=True):
     cleaned = text.strip()
-    return cleaned.lower() if lower else cleaned
+    if lower:
+        return cleaned.lower()
+    return cleaned
 
 print(normalize("  What is DNA?  "))
 ```
@@ -324,12 +337,14 @@ def summarize(cards):
             missing_answers += 1
     return total, missing_answers
 
-total, missing = summarize([{"answer": "A"}, {"answer": ""}])
+result = summarize([{"answer": "A"}, {"answer": ""}])
+total = result[0]
+missing = result[1]
 print(total, missing)
 ```
 
-The caller decides what to do with the result: print it, assert on it, or write
-it to a report.
+The function returns a tuple; index it to read each value. The caller decides
+what to do with the result: print it, assert on it, or write it to a report.
 
 ### Imports and Small Modules
 
@@ -384,6 +399,19 @@ print(len(text))
 Use `/` to join path parts. Check `.exists()` before reading when a missing file
 is a legitimate test case; otherwise let a clear error surface.
 
+A small quiz smoke check reads the HTML and asserts the controls the contract
+requires. A plain `assert` is enough for a short script; Part 5 formalizes this
+with pytest.
+
+```python
+from pathlib import Path
+
+html = Path("data/quiz.html").read_text(encoding="utf-8")
+assert "Show answer" in html, "Quiz is missing the Show answer control"
+assert "Next card" in html, "Quiz is missing the Next card control"
+print("Quiz controls found")
+```
+
 ### Reading and Writing Text
 
 **Day-to-day.** Use `with open(...)` so the file closes even if an error occurs.
@@ -432,16 +460,18 @@ header. Values arrive as strings, so convert numbers explicitly.
 ```python
 import csv
 
-with open("cards.csv", newline="", encoding="utf-8") as handle:
+with open("data/cards.csv", newline="", encoding="utf-8") as handle:
     rows = list(csv.DictReader(handle))
 
 print(len(rows))
+if len(rows) != 12:
+    raise SystemExit(f"Expected 12 rows, found {len(rows)}")
 for row in rows:
     print(row["question"])
 ```
 
 Use `newline=""` when opening a CSV file so the `csv` module handles line
-endings correctly.
+endings correctly. The count check turns a wrong fixture into a clear failure.
 
 ### Exceptions
 
@@ -451,15 +481,22 @@ specific error you can handle; let the rest surface with a clear message.
 ```python
 from pathlib import Path
 
-path = Path("cards.md")
+path = Path("data/cards.md")
 try:
     text = path.read_text(encoding="utf-8")
 except FileNotFoundError:
     raise SystemExit(f"Missing fixture: {path}")
+
+raw_count = "many"
+try:
+    count = int(raw_count)
+except ValueError:
+    raise SystemExit(f"Expected a number, got {raw_count!r}")
 ```
 
 Avoid a bare `except:` that hides every error. If you catch, either recover or
-raise a message that tells the next person what to fix.
+raise a message that tells the next person what to fix. The second example turns
+a malformed value into a clear failure instead of a traceback.
 
 ### Logging Basics
 
@@ -526,8 +563,15 @@ shows the expected and actual value.
 ```python
 def test_no_empty_answers():
     cards = [{"answer": "A"}, {"answer": ""}]
-    empty = [card for card in cards if not card["answer"]]
+    empty = []
+    for card in cards:
+        if not card["answer"]:
+            empty.append(card)
     assert empty == [], f"Expected no empty answers, found {empty}"
+
+def test_no_duplicate_questions():
+    questions = ["Q1", "Q1"]
+    assert len(set(questions)) == len(questions)
 ```
 
 The message is what a reviewer sees first. Make it say what rule failed and
@@ -647,6 +691,22 @@ print(result.returncode)
 print(result.stdout.strip())
 ```
 
+The same pattern can run the flashcards checker; the process still needs the
+project's files and dependencies.
+
+```python
+import subprocess
+
+result = subprocess.run(
+    ["python", "flashcards.py", "--check"],
+    capture_output=True,
+    text=True,
+    check=False,
+)
+if result.returncode != 0:
+    raise SystemExit(result.stderr)
+```
+
 Use `check=True` when a non-zero exit should raise an exception. Do not build a
 shell string from user input; pass a list to avoid shell quoting problems.
 
@@ -705,7 +765,18 @@ print(len(payload["cards"]))
 ```
 
 `raise_for_status()` turns a 4xx/5xx response into an exception. Always set a
-timeout so a hung service does not hang the test run.
+timeout so a hung service does not hang the test run. A POST follows the same
+shape; send the body as JSON and still check the response.
+
+```python
+created = requests.post(
+    url,
+    json={"question": "What is a schema?", "answer": "A mental framework"},
+    timeout=5,
+)
+created.raise_for_status()
+print(created.status_code)
+```
 
 ### Environment Variables
 

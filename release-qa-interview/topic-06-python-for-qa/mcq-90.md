@@ -266,7 +266,7 @@ D. `None` can only be used in strings
 <details>
 <summary>Show answer</summary>
 
-**Correct answer: C.** Use `is None` for a missing value. `0` and `False` are different values.
+**Correct answer: C.** `False` and `0` are different types but compare equal (`False == 0` is `True`); `None` is distinct. Use `is None` for a missing value.
 
 </details>
 
@@ -470,15 +470,15 @@ D. `cards.loop()`
 
 #### MCQ 33. A tester needs the loop values 0, 1, and 2. Which call produces them?
 
-A. `1, 2, 3`
-B. `0, 1, 2, 3`
-C. `0, 1, 2`
-D. `3`
+A. `range(1, 4)`
+B. `range(4)`
+C. `range(3)`
+D. `range(3, 4)`
 
 <details>
 <summary>Show answer</summary>
 
-**Correct answer: C.** `range` stops before the given value.
+**Correct answer: C.** `range(3)` produces 0, 1, and 2; the stop is exclusive.
 
 </details>
 
@@ -867,7 +867,7 @@ D. `print("ok")`
 #### MCQ 61. Which file will pytest discover by default?
 
 A. `tests/test_cards.py`
-B. `tests/cards_test.py` only
+B. `tests/card_tests.py`
 C. `tests/check_cards.py`
 D. `tests/cards.py`
 
@@ -964,10 +964,10 @@ D. The coverage report
 
 #### MCQ 68. A test passes only when another test runs first. What property is missing?
 
-A. So they run faster
-B. So they never fail
-C. So they do not need assertions
-D. So they can run alone and in any order
+A. Speed
+B. No assertions
+C. A fixture
+D. Independence
 
 <details>
 <summary>Show answer</summary>
