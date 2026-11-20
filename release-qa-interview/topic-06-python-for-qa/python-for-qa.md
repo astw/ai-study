@@ -235,3 +235,261 @@ values.
 - Slices exclude the stop index.
 - `int("4.5")` fails; use `float()` for decimals.
 - A set removes duplicates but also loses order.
+
+## Part 3 — Control Flow and Functions
+
+### if, elif, and else
+
+**Day-to-day.** Conditionals choose a branch. Compare values with `==`, `!=`,
+`<`, `<=`, `>`, and `>=`; combine conditions with `and`, `or`, and `not`.
+Indentation defines the block.
+
+```python
+status = "failed"
+if status == "failed":
+    print("Block the release")
+elif status == "running":
+    print("Wait for the run to finish")
+else:
+    print("Review the result")
+```
+
+Keep the condition close to the product rule. A branch that says “failed” but
+checks only one field can mislead the reader.
+
+### for Loops and range
+
+**Day-to-day.** A `for` loop visits each item in a list, dictionary, or other
+iterable. `range(n)` produces the numbers `0` to `n - 1`; `enumerate()` adds an
+index.
+
+```python
+cards = ["What is a cell?", "What is DNA?", "What is a gene?"]
+for index, card in enumerate(cards, start=1):
+    print(index, card)
+
+failures = 0
+for card in cards:
+    if "?" not in card:
+        failures += 1
+print(f"Missing question marks: {failures}")
+```
+
+Use a `for` loop when the number of items comes from the data. Avoid changing a
+list while you are looping over it.
+
+### while Loops
+
+**Frequent.** A `while` loop repeats until a condition becomes false. It is
+useful for a retry with a limit, but it needs a clear stop condition.
+
+```python
+attempts = 0
+while attempts < 3:
+    attempts += 1
+    print(f"Attempt {attempts}")
+```
+
+If the condition never changes, the loop never ends. Prefer a `for` loop over a
+fixed range when you already know the maximum number of attempts.
+
+### Functions and Arguments
+
+**Day-to-day.** A function groups a step you want to reuse and name. Parameters
+are inputs; defaults make optional arguments explicit.
+
+```python
+def normalize(text, lower=True):
+    cleaned = text.strip()
+    return cleaned.lower() if lower else cleaned
+
+print(normalize("  What is DNA?  "))
+```
+
+Use a function when the same logic appears twice or when a step deserves a name.
+Keep the function small enough to read in one screen.
+
+### Return Values
+
+**Day-to-day.** `return` sends a value back to the caller. A function can return
+one value or a tuple of values. Returning a result is easier to test than
+printing inside the function.
+
+```python
+def summarize(cards):
+    total = len(cards)
+    missing_answers = 0
+    for card in cards:
+        if not card.get("answer"):
+            missing_answers += 1
+    return total, missing_answers
+
+total, missing = summarize([{"answer": "A"}, {"answer": ""}])
+print(total, missing)
+```
+
+The caller decides what to do with the result: print it, assert on it, or write
+it to a report.
+
+### Imports and Small Modules
+
+**Frequent.** `import` brings in the standard library or your own module. Keep
+reusable helpers in a small file and import them from the test or script.
+
+```python
+# helpers.py
+def count_cards(cards):
+    return len(cards)
+
+# check_cards.py
+from helpers import count_cards
+
+print(count_cards(["one", "two"]))
+```
+
+Import only what you need, and keep module names lowercase with underscores. A
+local module is found when it sits next to the script or on `PYTHONPATH`.
+
+### Release QA Use
+
+Use conditionals to encode release rules, loops to process cards or failures,
+functions to make a check reusable, and imports to share helpers between a
+script and its tests. Return values make the behavior easy to assert.
+
+### Watch-outs
+
+- Indentation is syntax in Python; a misindented block changes behavior.
+- Changing a list while looping over it can skip items.
+- A `while` loop without a changing condition can hang.
+- A function that prints instead of returning is harder to test.
+- Import errors often mean the script is running from the wrong directory.
+
+## Part 4 — Files and Data
+
+### pathlib
+
+**Day-to-day.** `pathlib.Path` gives you a readable way to build and inspect
+paths. It works on Windows, macOS, and Linux without manual slash handling.
+
+```python
+from pathlib import Path
+
+path = Path("data") / "cards.md"
+print(path.exists())
+print(path.parent)
+text = path.read_text(encoding="utf-8")
+print(len(text))
+```
+
+Use `/` to join path parts. Check `.exists()` before reading when a missing file
+is a legitimate test case; otherwise let a clear error surface.
+
+### Reading and Writing Text
+
+**Day-to-day.** Use `with open(...)` so the file closes even if an error occurs.
+Always pass an encoding when the file may contain non-ASCII text.
+
+```python
+from pathlib import Path
+
+path = Path("report.txt")
+with path.open("w", encoding="utf-8") as handle:
+    handle.write("cards: 12\n")
+
+with path.open(encoding="utf-8") as handle:
+    for line in handle:
+        print(line.rstrip())
+```
+
+`read_text()` and `write_text()` are shorter for small files. Use the `with`
+form for large files or line-by-line processing.
+
+### JSON
+
+**Frequent.** JSON is a common fixture and API format. `json.loads()` parses a
+string; `json.dumps()` produces a string; `json.load()` and `json.dump()` work
+with files.
+
+```python
+import json
+
+payload = '{"id": 1, "question": "What is DNA?"}'
+card = json.loads(payload)
+print(card["question"])
+
+encoded = json.dumps(card, indent=2)
+print(encoded)
+```
+
+A JSON decode error means the input is not valid JSON; show the offending
+fixture and the position rather than guessing.
+
+### CSV
+
+**Frequent.** `csv.DictReader` turns each row into a dictionary keyed by the
+header. Values arrive as strings, so convert numbers explicitly.
+
+```python
+import csv
+
+with open("cards.csv", newline="", encoding="utf-8") as handle:
+    rows = list(csv.DictReader(handle))
+
+print(len(rows))
+for row in rows:
+    print(row["question"])
+```
+
+Use `newline=""` when opening a CSV file so the `csv` module handles line
+endings correctly.
+
+### Exceptions
+
+**Day-to-day.** An exception is Python's way of reporting an error. Catch the
+specific error you can handle; let the rest surface with a clear message.
+
+```python
+from pathlib import Path
+
+path = Path("cards.md")
+try:
+    text = path.read_text(encoding="utf-8")
+except FileNotFoundError:
+    raise SystemExit(f"Missing fixture: {path}")
+```
+
+Avoid a bare `except:` that hides every error. If you catch, either recover or
+raise a message that tells the next person what to fix.
+
+### Logging Basics
+
+**Situational.** `print()` is fine for a small script. `logging` is better when
+you need levels, timestamps, or a record that can be filtered.
+
+```python
+import logging
+
+logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
+logger = logging.getLogger(__name__)
+
+logger.info("Checking cards")
+logger.warning("Two cards have no source")
+```
+
+Do not log secrets, tokens, or customer data. A log is often copied into a
+ticket or a CI artifact.
+
+### Release QA Use
+
+Use `pathlib` and `with` to read fixtures safely, JSON and CSV to parse test
+data, exceptions to fail with a useful message, and logging for a script that
+runs in CI. A good failure says which file, which row, and what was expected.
+
+### Watch-outs
+
+- Reading a file without an encoding can fail on non-ASCII text.
+- CSV values are strings; convert before comparing numbers.
+- A bare `except:` hides the error you need to debug.
+- `json.loads()` expects a string; `json.load()` expects a file object.
+- Do not write secrets or customer data to a log.
+- A missing file is a test result only when the test expects it.
