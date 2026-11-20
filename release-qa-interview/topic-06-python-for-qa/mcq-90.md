@@ -468,7 +468,7 @@ D. `cards.loop()`
 
 </details>
 
-#### MCQ 33. What does `range(3)` produce?
+#### MCQ 33. A tester needs the loop values 0, 1, and 2. Which call produces them?
 
 A. `1, 2, 3`
 B. `0, 1, 2, 3`
@@ -906,7 +906,7 @@ D. `pytest.skip`
 
 </details>
 
-#### MCQ 64. What is a pytest fixture?
+#### MCQ 64. A test needs a temporary cards file that is created before it runs. What pytest feature should it use?
 
 A. A test file
 B. A production dependency
@@ -934,7 +934,7 @@ D. `fixture_dir`
 
 </details>
 
-#### MCQ 66. What does `@pytest.mark.parametrize` do?
+#### MCQ 66. A tester wants one test to run with three boundary inputs and show each case separately. Which pytest feature fits?
 
 A. Skips a test
 B. Runs the same test with several input/expected pairs
@@ -962,7 +962,7 @@ D. The coverage report
 
 </details>
 
-#### MCQ 68. Why should tests be independent?
+#### MCQ 68. A test passes only when another test runs first. What property is missing?
 
 A. So they run faster
 B. So they never fail
@@ -1018,7 +1018,7 @@ D. A parametrized input
 
 </details>
 
-#### MCQ 72. How does pytest differ from unittest?
+#### MCQ 72. A team is choosing a test style for a small new QA suite. Which statement supports pytest?
 
 A. pytest cannot run assertions
 B. unittest cannot use fixtures
@@ -1272,7 +1272,7 @@ D. When the data is JSON
 
 </details>
 
-#### MCQ 90. What makes a QA script trustworthy?
+#### MCQ 90. A reviewer is checking a new QA script before it joins CI. Which trait matters most?
 
 A. It prints “OK” without checking anything
 B. It hides failures
