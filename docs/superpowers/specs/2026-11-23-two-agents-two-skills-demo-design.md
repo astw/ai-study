@@ -43,6 +43,9 @@ parent's.
   list syntax; every tool the skill body uses must be in the agent's `tools`;
   skills must not set `disable-model-invocation: true`; up to 32 preloaded names.
 - Agents use only `Read`.
+- The run prompt must forbid reading the source or skill files and invoking
+  either skill in the main conversation; each output contract stays out of the
+  prompt.
 - Do not commit unless the user asks.
 
 ## Approaches considered
@@ -82,21 +85,23 @@ Prompt:
 
 ```text
 Use the bullet-summarizer and quiz-writer agents in parallel on article.md.
-Do not read article.md yourself.
+Do not read article.md or the skill files yourself, and do not invoke either
+skill in this conversation; only the agents should use them.
 ```
 
-Expected: two reports, one `[bullet report]` with three bullets and one
-`[quiz report]` with three Q&A pairs.
+Expected: both agents start from this one prompt and run concurrently; each
+report arrives as a completion notification. Each report carries its prefix and
+its skill's format: three bullets, and three Q&A pairs.
 
 ### Observations the README teaches
 
-1. **Parallel dispatch** — both reports return in one turn.
-2. **Parent lacks the source** — a source-detail follow-up ("Which two pigment
-   names does the article give for yellow and orange?") cannot be answered from
-   the parent's context; it must read the file or delegate again.
-3. **Parent lacks the skills** — asking what procedure `quiz-writer` followed
-   cannot be answered from the parent's context; it requires re-delegating to
-   that agent.
+1. **Parallel dispatch** — both agents start from one prompt and run
+   concurrently; each report arrives when it finishes.
+2. **Parent lacks the source** — the exact first sentence of `article.md` cannot
+   be quoted from the parent's context; it must read the file or delegate again.
+3. **Parent lacks the skills** — asking for the exact five numbered steps of
+   `quiz-maker` cannot be answered from the parent's context; it requires
+   re-delegating to that agent.
 
 ## Left to the builder
 

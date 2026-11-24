@@ -39,10 +39,13 @@ Type this at the Claude Code prompt and press Enter:
 
 ```text
 Use the bullet-summarizer and quiz-writer agents in parallel on article.md.
-Do not read article.md or the skill files yourself.
+Do not read article.md or the skill files yourself, and do not invoke either
+skill in this conversation; only the agents should use them.
 ```
 
-Expected: two reports in one turn.
+Expected: both agents start from this one prompt and run concurrently. Each
+report arrives when it finishes, as a completion notification — wait for both
+before Step 4.
 
 - `[bullet report]` — exactly three bullets, each under 12 words.
 - `[quiz report]` — exactly three numbered Q&A pairs, each answer under 20
@@ -56,31 +59,32 @@ own agent, not in this conversation.
 Ask:
 
 ```text
-Which two pigment names does the article give for yellow and orange?
+Quote the first sentence of article.md exactly, word for word.
 ```
 
-Expected: the main conversation cannot answer from memory. It must read
-`article.md` or delegate again. Allow the read when it asks, and notice the
-extra step.
+Expected: the main conversation cannot quote it from memory; the article's
+text never entered its context. It must read `article.md` or delegate again.
+Allow the read when it asks, and notice the extra step.
 
 ### Step 5 — Test the main conversation's knowledge of the skills
 
 Ask:
 
 ```text
-Without reading files or asking the agents, what procedure did quiz-writer follow?
+Without reading files or asking the agents, list the exact five numbered steps the quiz-maker skill gave quiz-writer.
 ```
 
-Expected: it cannot say. The skill text never entered the main context.
+Expected: it can name the skill and its description, but not the steps. The
+skill body never entered the main context.
 
 Then ask:
 
 ```text
-Ask quiz-writer to report the procedure it was given.
+Ask quiz-writer to quote the exact five numbered steps of the quiz-maker skill it was given. Do not write quiz questions.
 ```
 
-Expected: the agent can quote the `quiz-maker` procedure, because the skill was
-preloaded into its context.
+Expected: the agent can quote the five steps, because the skill was preloaded
+into its context.
 
 ### Step 6 — Exit
 
@@ -121,6 +125,9 @@ two-agents-two-skills-demo/
 - The output contracts live only in the `SKILL.md` files. The agents and the
   prompt above do not restate them, so a correctly shaped report shows the
   skill did the work.
+- If the main conversation answers a Step 4 or Step 5 probe without reading,
+  delegating, or quoting, it used general knowledge or the skill descriptions.
+  Ask for the exact quote or the exact list to expose the difference.
 - To change a format, edit that skill only; the agent picks it up at startup.
 - The article is the same text as `../skill-vs-agent-demo/article.md`, so the
   two demos can be compared side by side.

@@ -19,6 +19,7 @@
 - Skills must not set `disable-model-invocation: true`; preloading skips such skills.
 - Do not commit: the user has not asked for this demo to be committed.
 - The README must instruct starting Claude Code inside the demo folder, or `.claude/` is not discovered.
+- The run prompt must forbid reading the source or skill files and invoking either skill in the main conversation.
 
 ## Review Focus
 
@@ -298,10 +299,13 @@ Type this at the Claude Code prompt and press Enter:
 
 ```text
 Use the bullet-summarizer and quiz-writer agents in parallel on article.md.
-Do not read article.md or the skill files yourself.
+Do not read article.md or the skill files yourself, and do not invoke either
+skill in this conversation; only the agents should use them.
 ```
 
-Expected: two reports in one turn.
+Expected: both agents start from this one prompt and run concurrently. Each
+report arrives when it finishes, as a completion notification — wait for both
+before Step 4.
 
 - `[bullet report]` — exactly three bullets, each under 12 words.
 - `[quiz report]` — exactly three numbered Q&A pairs, each answer under 20
@@ -315,31 +319,32 @@ own agent, not in this conversation.
 Ask:
 
 ```text
-Which two pigment names does the article give for yellow and orange?
+Quote the first sentence of article.md exactly, word for word.
 ```
 
-Expected: the main conversation cannot answer from memory. It must read
-`article.md` or delegate again. Allow the read when it asks, and notice the
-extra step.
+Expected: the main conversation cannot quote it from memory; the article's
+text never entered its context. It must read `article.md` or delegate again.
+Allow the read when it asks, and notice the extra step.
 
 ### Step 5 — Test the main conversation's knowledge of the skills
 
 Ask:
 
 ```text
-Without reading files or asking the agents, what procedure did quiz-writer follow?
+Without reading files or asking the agents, list the exact five numbered steps the quiz-maker skill gave quiz-writer.
 ```
 
-Expected: it cannot say. The skill text never entered the main context.
+Expected: it can name the skill and its description, but not the steps. The
+skill body never entered the main context.
 
 Then ask:
 
 ```text
-Ask quiz-writer to report the procedure it was given.
+Ask quiz-writer to quote the exact five numbered steps of the quiz-maker skill it was given. Do not write quiz questions.
 ```
 
-Expected: the agent can quote the `quiz-maker` procedure, because the skill was
-preloaded into its context.
+Expected: the agent can quote the five steps, because the skill was preloaded
+into its context.
 
 ### Step 6 — Exit
 
@@ -380,6 +385,9 @@ two-agents-two-skills-demo/
 - The output contracts live only in the `SKILL.md` files. The agents and the
   prompt above do not restate them, so a correctly shaped report shows the
   skill did the work.
+- If the main conversation answers a Step 4 or Step 5 probe without reading,
+  delegating, or quoting, it used general knowledge or the skill descriptions.
+  Ask for the exact quote or the exact list to expose the difference.
 - To change a format, edit that skill only; the agent picks it up at startup.
 - The article is the same text as `../skill-vs-agent-demo/article.md`, so the
   two demos can be compared side by side.
@@ -387,8 +395,8 @@ two-agents-two-skills-demo/
 
 - [ ] **Step 2: Verify the README covers both agents and all observations**
 
-Run: `Select-String -Path "C:\Users\wshuhao\AI_Study\AI_general\two-agents-two-skills-demo\README.md" -Pattern "claude --version|Start inside this folder|Do not read article.md|bullet-summarizer|quiz-writer|\[bullet report\]|\[quiz report\]|Which two pigment names|Without reading files|Ask quiz-writer"`
-Expected: at least ten matching lines, covering every pattern at least once.
+Run: `Select-String -Path "C:\Users\wshuhao\AI_Study\AI_general\two-agents-two-skills-demo\README.md" -Pattern "claude --version|Start inside this folder|Do not read article.md|do not invoke either|bullet-summarizer|quiz-writer|\[bullet report\]|\[quiz report\]|Quote the first sentence|Without reading files|five numbered steps|Ask quiz-writer"`
+Expected: at least twelve matching lines, covering every pattern at least once.
 
 ---
 
@@ -420,8 +428,8 @@ In a fresh Claude Code session started inside the demo folder, follow
 `README.md` Steps 3–5 in order.
 
 Expected observations:
-1. Two reports return in one turn: `[bullet report]` with three short bullets and `[quiz report]` with three Q&A pairs, proving each agent followed its own preloaded skill.
-2. The source-detail follow-up requires the main Claude to read `article.md` or delegate, because the article never entered its context.
-3. The skill-detail follow-up cannot be answered from the main context; asking `quiz-writer` returns the procedure, because the skill lives inside that agent.
+1. Both agents start from the one prompt and run concurrently; the reports arrive as completion notifications: `[bullet report]` with three short bullets and `[quiz report]` with three Q&A pairs, proving each agent followed its own preloaded skill.
+2. The exact-quote follow-up requires the main Claude to read `article.md` or delegate, because the article never entered its context.
+3. The five-steps follow-up cannot be answered from the main context; asking `quiz-writer` returns the steps, because the skill lives inside that agent.
 
 This step cannot be automated; it needs an interactive Claude Code session.
